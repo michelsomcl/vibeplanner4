@@ -43,16 +43,20 @@ export function AppSidebar() {
 
   const getNavClass = (isActive: boolean) =>
     isActive 
-      ? "bg-primary text-white font-medium" 
-      : "hover:bg-primary/10 text-gray-700 hover:text-primary";
+      ? "bg-white/20 text-white font-medium" 
+      : "hover:bg-white/10 text-white/80 hover:text-white";
 
   const isCollapsed = state === "collapsed";
 
   return (
-    <Sidebar className={isCollapsed ? "w-16" : "w-64"} collapsible="icon">
-      <SidebarContent className="bg-white border-r border-gray-200">
+    <Sidebar 
+      className={isCollapsed ? "w-16" : "w-64"} 
+      collapsible="icon"
+      style={{ backgroundColor: '#7654ad' }}
+    >
+      <SidebarContent className="border-r-0" style={{ backgroundColor: '#7654ad' }}>
         <SidebarGroup>
-          <SidebarGroupLabel className="text-primary font-semibold">
+          <SidebarGroupLabel className="text-white font-semibold">
             {!isCollapsed && "Menu Principal"}
           </SidebarGroupLabel>
           <SidebarGroupContent>
@@ -77,7 +81,7 @@ export function AppSidebar() {
 
         {clientItems.length > 0 && (
           <SidebarGroup>
-            <SidebarGroupLabel className="text-primary font-semibold">
+            <SidebarGroupLabel className="text-white font-semibold">
               {!isCollapsed && "Planejamento"}
             </SidebarGroupLabel>
             <SidebarGroupContent>
