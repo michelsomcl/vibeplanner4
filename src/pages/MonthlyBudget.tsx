@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -9,10 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Plus, TrendingUp, TrendingDown, DollarSign, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import BudgetItemForm from "@/components/BudgetItemForm";
 
 const MonthlyBudget = () => {
   const { id } = useParams();
   const queryClient = useQueryClient();
+  const [incomeFormOpen, setIncomeFormOpen] = useState(false);
+  const [expenseFormOpen, setExpenseFormOpen] = useState(false);
 
   // Get client data
   const { data: client, isLoading: clientLoading } = useQuery({
@@ -195,14 +197,22 @@ const MonthlyBudget = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-primary">Orçamento Mensal</h1>
-          <p className="text-gray-600 mt-2">Controle financeiro - {client.name}</p>
+          <p className="text-gray-600 mt-2">Controle financeiro - {client?.name}</p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" className="border-green-500 text-green-600 hover:bg-green-50">
+          <Button 
+            variant="outline" 
+            className="border-green-500 text-green-600 hover:bg-green-50"
+            onClick={() => setIncomeFormOpen(true)}
+          >
             <Plus className="mr-2 h-4 w-4" />
             Nova Receita
           </Button>
-          <Button variant="outline" className="border-red-500 text-red-600 hover:bg-red-50">
+          <Button 
+            variant="outline" 
+            className="border-red-500 text-red-600 hover:bg-red-50"
+            onClick={() => setExpenseFormOpen(true)}
+          >
             <Plus className="mr-2 h-4 w-4" />
             Nova Despesa
           </Button>
@@ -296,7 +306,11 @@ const MonthlyBudget = () => {
           {income.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <p>Nenhuma receita cadastrada para este mês.</p>
-              <Button className="mt-4" variant="outline">
+              <Button 
+                className="mt-4" 
+                variant="outline"
+                onClick={() => setIncomeFormOpen(true)}
+              >
                 <Plus className="mr-2 h-4 w-4" />
                 Adicionar Receita
               </Button>
@@ -352,7 +366,11 @@ const MonthlyBudget = () => {
           {expenses.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
               <p>Nenhuma despesa cadastrada para este mês.</p>
-              <Button className="mt-4" variant="outline">
+              <Button 
+                className="mt-4" 
+                variant="outline"
+                onClick={() => setExpenseFormOpen(true)}
+              >
                 <Plus className="mr-2 h-4 w-4" />
                 Adicionar Despesa
               </Button>
@@ -409,6 +427,21 @@ const MonthlyBudget = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Forms */}
+      <BudgetItemForm
+        isOpen={incomeFormOpen}
+        onClose={() => setIncomeFormOpen(false)}
+        clientId={id!}
+        type="income"
+      />
+      
+      <BudgetItemForm
+        isOpen={expenseFormOpen}
+        onClose={() => setExpenseFormOpen(false)}
+        clientId={id!}
+        type="expense"
+      />
     </div>
   );
 };

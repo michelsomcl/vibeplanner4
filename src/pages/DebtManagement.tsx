@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { 
@@ -19,8 +20,10 @@ import {
   DollarSign,
   Calendar,
   TrendingDown,
-  AlertCircle
+  AlertCircle,
+  BarChart3
 } from "lucide-react";
+import DebtDiagnosis from "@/components/DebtDiagnosis";
 
 export default function DebtManagement() {
   const { id } = useParams<{ id: string }>();
@@ -415,99 +418,138 @@ export default function DebtManagement() {
           </Dialog>
         </div>
 
-        {debts?.length === 0 ? (
-          <div className="text-center py-12">
-            <AlertCircle className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">
-              Nenhuma dívida cadastrada
-            </h3>
-            <p className="text-gray-600 mb-6">
-              Comece adicionando as dívidas do cliente para estruturar o plano de quitação.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {debts?.map((debt) => (
-              <Card key={debt.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="text-lg">{debt.name}</CardTitle>
-                      <p className="text-sm text-gray-600">{debt.institution}</p>
-                    </div>
-                    <Badge className={`${getStatusColor(debt.status)} text-white`}>
-                      {getStatusText(debt.status)}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div className="flex items-center space-x-2">
-                      <DollarSign className="h-4 w-4 text-green-600" />
-                      <div>
-                        <p className="font-medium">Valor Total</p>
-                        <p className="text-green-600">{formatCurrency(debt.total_amount)}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <TrendingDown className="h-4 w-4 text-blue-600" />
-                      <div>
-                        <p className="font-medium">Parcela</p>
-                        <p className="text-blue-600">{formatCurrency(debt.installment_value)}</p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center space-x-2">
-                      <Calendar className="h-4 w-4 text-orange-600" />
-                      <div>
-                        <p className="font-medium">Vencimento</p>
-                        <p className="text-orange-600">{formatDate(debt.due_date)}</p>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <p className="font-medium">Restantes</p>
-                      <p>{debt.remaining_installments}x</p>
-                    </div>
-                  </div>
-                  
-                  <div className="text-sm">
-                    <p className="font-medium">Taxa de Juros</p>
-                    <p className="text-red-600">{debt.interest_rate}% a.m.</p>
-                  </div>
-                  
-                  {debt.observations && (
-                    <div className="text-sm">
-                      <p className="font-medium">Observações</p>
-                      <p className="text-gray-600">{debt.observations}</p>
-                    </div>
-                  )}
-                  
-                  <div className="flex justify-end space-x-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleEdit(debt)}
-                    >
-                      <Edit className="h-4 w-4 mr-1" />
-                      Editar
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => deleteDebtMutation.mutate(debt.id)}
-                      disabled={deleteDebtMutation.isPending}
-                    >
-                      <Trash2 className="h-4 w-4 mr-1" />
-                      Excluir
+        <Tabs defaultValue="diagnosis" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="diagnosis" className="flex items-center gap-2">
+              <BarChart3 className="h-4 w-4" />
+              Diagnóstico e Metas
+            </TabsTrigger>
+            <TabsTrigger value="debts" className="flex items-center gap-2">
+              <TrendingDown className="h-4 w-4" />
+              Gestão de Dívidas
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="diagnosis">
+            {debts && debts.length > 0 ? (
+              <DebtDiagnosis debts={debts} monthlyIncome={client?.monthly_income || 0} />
+            ) : (
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="text-center py-12">
+                    <AlertCircle className="mx-auto h-16 w-16 text-gray-400 mb-4" />
+                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                      Nenhuma dívida cadastrada
+                    </h3>
+                    <p className="text-gray-600 mb-6">
+                      Cadastre as dívidas do cliente para gerar o diagnóstico financeiro.
+                    </p>
+                    <Button onClick={() => setIsDialogOpen(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Cadastrar Primeira Dívida
                     </Button>
                   </div>
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        )}
+            )}
+          </TabsContent>
+
+          <TabsContent value="debts">
+            {debts?.length === 0 ? (
+              <div className="text-center py-12">
+                <AlertCircle className="mx-auto h-16 w-16 text-gray-400 mb-4" />
+                <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                  Nenhuma dívida cadastrada
+                </h3>
+                <p className="text-gray-600 mb-6">
+                  Comece adicionando as dívidas do cliente para estruturar o plano de quitação.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {debts?.map((debt) => (
+                  <Card key={debt.id} className="hover:shadow-lg transition-shadow">
+                    <CardHeader>
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <CardTitle className="text-lg">{debt.name}</CardTitle>
+                          <p className="text-sm text-gray-600">{debt.institution}</p>
+                        </div>
+                        <Badge className={`${getStatusColor(debt.status)} text-white`}>
+                          {getStatusText(debt.status)}
+                        </Badge>
+                      </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div className="flex items-center space-x-2">
+                          <DollarSign className="h-4 w-4 text-green-600" />
+                          <div>
+                            <p className="font-medium">Valor Total</p>
+                            <p className="text-green-600">{formatCurrency(debt.total_amount)}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          <TrendingDown className="h-4 w-4 text-blue-600" />
+                          <div>
+                            <p className="font-medium">Parcela</p>
+                            <p className="text-blue-600">{formatCurrency(debt.installment_value)}</p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center space-x-2">
+                          <Calendar className="h-4 w-4 text-orange-600" />
+                          <div>
+                            <p className="font-medium">Vencimento</p>
+                            <p className="text-orange-600">{formatDate(debt.due_date)}</p>
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <p className="font-medium">Restantes</p>
+                          <p>{debt.remaining_installments}x</p>
+                        </div>
+                      </div>
+                      
+                      <div className="text-sm">
+                        <p className="font-medium">Taxa de Juros</p>
+                        <p className="text-red-600">{debt.interest_rate}% a.m.</p>
+                      </div>
+                      
+                      {debt.observations && (
+                        <div className="text-sm">
+                          <p className="font-medium">Observações</p>
+                          <p className="text-gray-600">{debt.observations}</p>
+                        </div>
+                      )}
+                      
+                      <div className="flex justify-end space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(debt)}
+                        >
+                          <Edit className="h-4 w-4 mr-1" />
+                          Editar
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => deleteDebtMutation.mutate(debt.id)}
+                          disabled={deleteDebtMutation.isPending}
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Excluir
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   );
