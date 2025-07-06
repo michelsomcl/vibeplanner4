@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,9 +15,10 @@ interface BudgetItemFormProps {
   onClose: () => void;
   clientId: string;
   type: 'income' | 'expense';
+  editItem?: any;
 }
 
-const BudgetItemForm = ({ isOpen, onClose, clientId, type }: BudgetItemFormProps) => {
+const BudgetItemForm = ({ isOpen, onClose, clientId, type, editItem }: BudgetItemFormProps) => {
   const [formData, setFormData] = useState({
     name: '',
     planned_amount: '',
@@ -29,8 +30,23 @@ const BudgetItemForm = ({ isOpen, onClose, clientId, type }: BudgetItemFormProps
   const queryClient = useQueryClient();
   const currentMonth = new Date().toISOString().slice(0, 7) + '-01';
 
+  // Reset form data when editItem changes or dialog opens
+  useEffect(() => {
+    if (editItem) {
+      setFormData({
+        name: editItem.name || '',
+        planned_amount: editItem.planned_amount?.toString() || '',
+        actual_amount: editItem.actual_amount?.toString() || '',
+        category_id: editItem.category_id || '',
+        is_fixed: editItem.is_fixed || false
+      });
+    } else {
+      resetForm();
+    }
+  }, [editItem, isOpen]);
+
   const { data: categories } = useQuery({
-    queryKey: ['budget-categories'],
+    queryKey: ['budget-categories', type],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('budget_categories')
@@ -72,6 +88,36 @@ const BudgetItemForm = ({ isOpen, onClose, clientId, type }: BudgetItemFormProps
     },
   });
 
+  const updateItemMutation = useMutation({
+    mutationFn: async (itemData: any) => {
+      const { data, error } = await supabase
+        .from('budget_items')
+        .update({
+          name: itemData.name,
+          planned_amount: parseFloat(itemData.planned_amount) || 0,
+          actual_amount: parseFloat(itemData.actual_amount) || 0,
+          category_id: itemData.category_id,
+          is_fixed: itemData.is_fixed,
+        })
+        .eq('id', editItem.id)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budget-items', clientId, currentMonth] });
+      toast.success(`${type === 'income' ? 'Receita' : 'Despesa'} atualizada com sucesso!`);
+      onClose();
+      resetForm();
+    },
+    onError: (error) => {
+      console.error('Erro ao atualizar item:', error);
+      toast.error(`Erro ao atualizar ${type === 'income' ? 'receita' : 'despesa'}`);
+    },
+  });
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -88,7 +134,12 @@ const BudgetItemForm = ({ isOpen, onClose, clientId, type }: BudgetItemFormProps
       toast.error('Preencha todos os campos obrigatórios');
       return;
     }
-    createItemMutation.mutate(formData);
+
+    if (editItem) {
+      updateItemMutation.mutate(formData);
+    } else {
+      createItemMutation.mutate(formData);
+    }
   };
 
   const handleClose = () => {
@@ -96,12 +147,14 @@ const BudgetItemForm = ({ isOpen, onClose, clientId, type }: BudgetItemFormProps
     resetForm();
   };
 
+  const isLoading = createItemMutation.isPending || updateItemMutation.isPending;
+
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>
-            Nova {type === 'income' ? 'Receita' : 'Despesa'}
+            {editItem ? 'Editar' : 'Nova'} {type === 'income' ? 'Receita' : 'Despesa'}
           </DialogTitle>
         </DialogHeader>
         
@@ -174,8 +227,8 @@ const BudgetItemForm = ({ isOpen, onClose, clientId, type }: BudgetItemFormProps
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={createItemMutation.isPending}>
-              Adicionar
+            <Button type="submit" disabled={isLoading}>
+              {editItem ? 'Atualizar' : 'Adicionar'}
             </Button>
           </div>
         </form>

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -5,16 +6,21 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Plus, TrendingUp, TrendingDown, DollarSign, AlertCircle } from "lucide-react";
+import { Plus, TrendingUp, TrendingDown, DollarSign, AlertCircle, Edit, Trash } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import BudgetItemForm from "@/components/BudgetItemForm";
+import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 
 const MonthlyBudget = () => {
   const { id } = useParams();
   const queryClient = useQueryClient();
   const [incomeFormOpen, setIncomeFormOpen] = useState(false);
   const [expenseFormOpen, setExpenseFormOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<any>(null);
+  const [editingType, setEditingType] = useState<'income' | 'expense'>('income');
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [itemToDelete, setItemToDelete] = useState<any>(null);
 
   // Get client data
   const { data: client, isLoading: clientLoading } = useQuery({
@@ -113,6 +119,28 @@ const MonthlyBudget = () => {
     },
   });
 
+  // Delete item mutation
+  const deleteItemMutation = useMutation({
+    mutationFn: async (itemId: string) => {
+      const { error } = await supabase
+        .from('budget_items')
+        .delete()
+        .eq('id', itemId);
+      
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budget-items', id, currentMonth] });
+      toast.success('Item excluído com sucesso!');
+      setDeleteDialogOpen(false);
+      setItemToDelete(null);
+    },
+    onError: (error) => {
+      console.error('Erro ao excluir item:', error);
+      toast.error('Erro ao excluir item');
+    },
+  });
+
   // Initialize categories if empty
   useEffect(() => {
     if (categories && categories.length === 0) {
@@ -157,6 +185,33 @@ const MonthlyBudget = () => {
     if (planned === 0) return 0;
     const variance = ((actual - planned) / planned) * 100;
     return variance;
+  };
+
+  const handleEditItem = (item: any, type: 'income' | 'expense') => {
+    setEditingItem(item);
+    setEditingType(type);
+    if (type === 'income') {
+      setIncomeFormOpen(true);
+    } else {
+      setExpenseFormOpen(true);
+    }
+  };
+
+  const handleDeleteItem = (item: any) => {
+    setItemToDelete(item);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (itemToDelete) {
+      deleteItemMutation.mutate(itemToDelete.id);
+    }
+  };
+
+  const handleFormClose = () => {
+    setIncomeFormOpen(false);
+    setExpenseFormOpen(false);
+    setEditingItem(null);
   };
 
   const isLoading = clientLoading || categoriesLoading || budgetLoading;
@@ -342,9 +397,14 @@ const MonthlyBudget = () => {
                         </p>
                       </div>
                       
-                      <Button variant="outline" size="sm">
-                        Editar
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" onClick={() => handleEditItem(item, 'income')}>
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleDeleteItem(item)}>
+                          <Trash className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 );
@@ -405,9 +465,14 @@ const MonthlyBudget = () => {
                           </p>
                         </div>
                         
-                        <Button variant="outline" size="sm">
-                          Editar
-                        </Button>
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" onClick={() => handleEditItem(item, 'expense')}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button variant="outline" size="sm" onClick={() => handleDeleteItem(item)}>
+                            <Trash className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                     
@@ -431,16 +496,26 @@ const MonthlyBudget = () => {
       {/* Forms */}
       <BudgetItemForm
         isOpen={incomeFormOpen}
-        onClose={() => setIncomeFormOpen(false)}
+        onClose={handleFormClose}
         clientId={id!}
         type="income"
+        editItem={editingType === 'income' ? editingItem : undefined}
       />
       
       <BudgetItemForm
         isOpen={expenseFormOpen}
-        onClose={() => setExpenseFormOpen(false)}
+        onClose={handleFormClose}
         clientId={id!}
         type="expense"
+        editItem={editingType === 'expense' ? editingItem : undefined}
+      />
+
+      <DeleteConfirmDialog
+        isOpen={deleteDialogOpen}
+        onClose={() => setDeleteDialogOpen(false)}
+        onConfirm={confirmDelete}
+        itemName={itemToDelete?.name || ''}
+        itemType={itemToDelete?.budget_categories?.type === 'income' ? 'receita' : 'despesa'}
       />
     </div>
   );
