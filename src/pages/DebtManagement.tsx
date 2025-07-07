@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -126,6 +125,20 @@ const DebtManagement = () => {
   const handleEditDebt = (debt: any) => {
     setEditingDebt(debt);
     setDebtFormOpen(true);
+  };
+
+  const handleDeleteItem = (debt: any) => {
+    setDebtToDelete(debt);
+    setDeleteDialogOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (debtToDelete) {
+      // Implement delete functionality here
+      console.log('Deleting debt:', debtToDelete.id);
+      setDeleteDialogOpen(false);
+      setDebtToDelete(null);
+    }
   };
 
   const handleFormClose = () => {
@@ -386,9 +399,9 @@ const DebtManagement = () => {
       <DeleteConfirmDialog
         isOpen={deleteDialogOpen}
         onClose={() => setDeleteDialogOpen(false)}
-        onConfirm={() => {}}
+        onConfirm={confirmDelete}
         itemName={debtToDelete?.name || ''}
-        itemType="dívida"
+        itemType="debt"
       />
     </div>
   );

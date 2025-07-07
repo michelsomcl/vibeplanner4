@@ -2,15 +2,15 @@
 import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
-import { Plus, TrendingUp, TrendingDown, DollarSign, AlertCircle, Edit, Trash } from "lucide-react";
+import { Plus, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import BudgetItemForm from "@/components/BudgetItemForm";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
+import BudgetSummaryCards from "@/components/budget/BudgetSummaryCards";
+import BudgetItemsList from "@/components/budget/BudgetItemsList";
 
 const MonthlyBudget = () => {
   const { id } = useParams();
@@ -55,7 +55,7 @@ const MonthlyBudget = () => {
   });
 
   // Get current month's budget items
-  const currentMonth = new Date().toISOString().slice(0, 7) + '-01'; // YYYY-MM-01 format
+  const currentMonth = new Date().toISOString().slice(0, 7) + '-01';
   const { data: budgetItems, isLoading: budgetLoading } = useQuery({
     queryKey: ['budget-items', id, currentMonth],
     queryFn: async () => {
@@ -83,12 +83,10 @@ const MonthlyBudget = () => {
   const initializeCategories = useMutation({
     mutationFn: async () => {
       const defaultCategories = [
-        // Income categories
         { name: 'Salário', type: 'income' },
         { name: 'Freelances', type: 'income' },
         { name: 'Rendimentos', type: 'income' },
         { name: 'Outros Rendimentos', type: 'income' },
-        // Expense categories
         { name: 'Moradia', type: 'expense' },
         { name: 'Alimentação', type: 'expense' },
         { name: 'Transporte', type: 'expense' },
@@ -155,17 +153,6 @@ const MonthlyBudget = () => {
     }).format(value);
   };
 
-  const income = budgetItems?.filter(item => item.budget_categories?.type === 'income') || [];
-  const expenses = budgetItems?.filter(item => item.budget_categories?.type === 'expense') || [];
-
-  const totalPlannedIncome = income.reduce((sum, item) => sum + (item.planned_amount || 0), 0);
-  const totalActualIncome = income.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
-  const totalPlannedExpenses = expenses.reduce((sum, item) => sum + (item.planned_amount || 0), 0);
-  const totalActualExpenses = expenses.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
-  
-  const plannedBalance = totalPlannedIncome - totalPlannedExpenses;
-  const actualBalance = totalActualIncome - totalActualExpenses;
-
   const getCategoryColor = (categoryName: string) => {
     const colors: { [key: string]: string } = {
       'Moradia': 'bg-blue-100 text-blue-800',
@@ -226,11 +213,6 @@ const MonthlyBudget = () => {
               <div key={i} className="h-32 bg-gray-200 rounded"></div>
             ))}
           </div>
-          <div className="space-y-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-64 bg-gray-200 rounded"></div>
-            ))}
-          </div>
         </div>
       </div>
     );
@@ -245,6 +227,17 @@ const MonthlyBudget = () => {
       </div>
     );
   }
+
+  const income = budgetItems?.filter(item => item.budget_categories?.type === 'income') || [];
+  const expenses = budgetItems?.filter(item => item.budget_categories?.type === 'expense') || [];
+
+  const totalPlannedIncome = income.reduce((sum, item) => sum + (item.planned_amount || 0), 0);
+  const totalActualIncome = income.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
+  const totalPlannedExpenses = expenses.reduce((sum, item) => sum + (item.planned_amount || 0), 0);
+  const totalActualExpenses = expenses.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
+  
+  const plannedBalance = totalPlannedIncome - totalPlannedExpenses;
+  const actualBalance = totalActualIncome - totalActualExpenses;
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
@@ -275,62 +268,15 @@ const MonthlyBudget = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Receita Total</p>
-                <p className="text-2xl font-bold text-green-600">{formatCurrency(totalActualIncome)}</p>
-                <p className="text-xs text-gray-500">Planejado: {formatCurrency(totalPlannedIncome)}</p>
-              </div>
-              <TrendingUp className="h-8 w-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Despesa Total</p>
-                <p className="text-2xl font-bold text-red-600">{formatCurrency(totalActualExpenses)}</p>
-                <p className="text-xs text-gray-500">Planejado: {formatCurrency(totalPlannedExpenses)}</p>
-              </div>
-              <TrendingDown className="h-8 w-8 text-red-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Saldo Real</p>
-                <p className={`text-2xl font-bold ${actualBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                  {formatCurrency(actualBalance)}
-                </p>
-                <p className="text-xs text-gray-500">Planejado: {formatCurrency(plannedBalance)}</p>
-              </div>
-              <DollarSign className={`h-8 w-8 ${actualBalance >= 0 ? 'text-green-600' : 'text-red-600'}`} />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Taxa de Poupança</p>
-                <p className="text-2xl font-bold text-primary">
-                  {totalActualIncome > 0 ? ((actualBalance / totalActualIncome) * 100).toFixed(1) : 0}%
-                </p>
-                <p className="text-xs text-gray-500">da receita</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <BudgetSummaryCards
+        totalActualIncome={totalActualIncome}
+        totalPlannedIncome={totalPlannedIncome}
+        totalActualExpenses={totalActualExpenses}
+        totalPlannedExpenses={totalPlannedExpenses}
+        actualBalance={actualBalance}
+        plannedBalance={plannedBalance}
+        formatCurrency={formatCurrency}
+      />
 
       {/* Alert for negative balance */}
       {actualBalance < 0 && (
@@ -350,148 +296,28 @@ const MonthlyBudget = () => {
       )}
 
       {/* Income Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5 text-green-600" />
-            Receitas
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {income.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <p>Nenhuma receita cadastrada para este mês.</p>
-              <Button 
-                className="mt-4" 
-                variant="outline"
-                onClick={() => setIncomeFormOpen(true)}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Adicionar Receita
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {income.map((item) => {
-                const variance = getVariance(item.planned_amount || 0, item.actual_amount || 0);
-                return (
-                  <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
-                    <div className="flex items-center gap-4">
-                      <div>
-                        <p className="font-medium">{item.name}</p>
-                        <Badge className={getCategoryColor(item.budget_categories?.name || '')} variant="secondary">
-                          {item.budget_categories?.name}
-                        </Badge>
-                      </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-6">
-                      <div className="text-right">
-                        <p className="font-medium">{formatCurrency(item.actual_amount || 0)}</p>
-                        <p className="text-sm text-gray-500">Meta: {formatCurrency(item.planned_amount || 0)}</p>
-                      </div>
-                      
-                      <div className="text-right min-w-[80px]">
-                        <p className={`text-sm font-medium ${variance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {variance >= 0 ? '+' : ''}{variance.toFixed(1)}%
-                        </p>
-                      </div>
-                      
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => handleEditItem(item, 'income')}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => handleDeleteItem(item)}>
-                          <Trash className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <BudgetItemsList
+        items={income}
+        type="income"
+        formatCurrency={formatCurrency}
+        getCategoryColor={getCategoryColor}
+        getVariance={getVariance}
+        onAddItem={() => setIncomeFormOpen(true)}
+        onEditItem={(item) => handleEditItem(item, 'income')}
+        onDeleteItem={handleDeleteItem}
+      />
 
       {/* Expenses Section */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingDown className="h-5 w-5 text-red-600" />
-            Despesas
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          {expenses.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
-              <p>Nenhuma despesa cadastrada para este mês.</p>
-              <Button 
-                className="mt-4" 
-                variant="outline"
-                onClick={() => setExpenseFormOpen(true)}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Adicionar Despesa
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {expenses.map((item) => {
-                const variance = getVariance(item.planned_amount || 0, item.actual_amount || 0);
-                const progressValue = (item.planned_amount || 0) > 0 ? ((item.actual_amount || 0) / (item.planned_amount || 0)) * 100 : 0;
-                
-                return (
-                  <div key={item.id} className="p-4 border rounded-lg hover:bg-gray-50">
-                    <div className="flex items-center justify-between mb-2">
-                      <div className="flex items-center gap-4">
-                        <div>
-                          <p className="font-medium">{item.name}</p>
-                          <Badge className={getCategoryColor(item.budget_categories?.name || '')} variant="secondary">
-                            {item.budget_categories?.name}
-                          </Badge>
-                        </div>
-                      </div>
-                      
-                      <div className="flex items-center gap-6">
-                        <div className="text-right">
-                          <p className="font-medium">{formatCurrency(item.actual_amount || 0)}</p>
-                          <p className="text-sm text-gray-500">Orçado: {formatCurrency(item.planned_amount || 0)}</p>
-                        </div>
-                        
-                        <div className="text-right min-w-[80px]">
-                          <p className={`text-sm font-medium ${variance <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                            {variance >= 0 ? '+' : ''}{variance.toFixed(1)}%
-                          </p>
-                        </div>
-                        
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm" onClick={() => handleEditItem(item, 'expense')}>
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleDeleteItem(item)}>
-                            <Trash className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="space-y-1">
-                      <Progress 
-                        value={Math.min(progressValue, 100)} 
-                        className={`h-2 ${progressValue > 100 ? '[&>div]:bg-red-500' : '[&>div]:bg-blue-500'}`}
-                      />
-                      <p className="text-xs text-gray-500">
-                        {progressValue.toFixed(1)}% do orçado
-                      </p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <BudgetItemsList
+        items={expenses}
+        type="expense"
+        formatCurrency={formatCurrency}
+        getCategoryColor={getCategoryColor}
+        getVariance={getVariance}
+        onAddItem={() => setExpenseFormOpen(true)}
+        onEditItem={(item) => handleEditItem(item, 'expense')}
+        onDeleteItem={handleDeleteItem}
+      />
 
       {/* Forms */}
       <BudgetItemForm

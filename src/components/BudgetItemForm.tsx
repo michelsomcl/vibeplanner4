@@ -1,14 +1,11 @@
 
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Switch } from "@/components/ui/switch";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
+import BudgetFormFields from "./budget-form/BudgetFormFields";
 
 interface BudgetItemFormProps {
   isOpen: boolean;
@@ -159,69 +156,12 @@ const BudgetItemForm = ({ isOpen, onClose, clientId, type, editItem }: BudgetIte
         </DialogHeader>
         
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <Label htmlFor="name">Nome *</Label>
-            <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData({...formData, name: e.target.value})}
-              placeholder={`Nome da ${type === 'income' ? 'receita' : 'despesa'}`}
-              required
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="category">Categoria *</Label>
-            <Select 
-              value={formData.category_id} 
-              onValueChange={(value) => setFormData({...formData, category_id: value})}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione uma categoria" />
-              </SelectTrigger>
-              <SelectContent>
-                {categories?.map((category) => (
-                  <SelectItem key={category.id} value={category.id}>
-                    {category.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="planned">Valor Planejado</Label>
-              <Input
-                id="planned"
-                type="number"
-                step="0.01"
-                value={formData.planned_amount}
-                onChange={(e) => setFormData({...formData, planned_amount: e.target.value})}
-                placeholder="0,00"
-              />
-            </div>
-            <div>
-              <Label htmlFor="actual">Valor Real</Label>
-              <Input
-                id="actual"
-                type="number"
-                step="0.01"
-                value={formData.actual_amount}
-                onChange={(e) => setFormData({...formData, actual_amount: e.target.value})}
-                placeholder="0,00"
-              />
-            </div>
-          </div>
-
-          <div className="flex items-center space-x-2">
-            <Switch
-              id="fixed"
-              checked={formData.is_fixed}
-              onCheckedChange={(checked) => setFormData({...formData, is_fixed: checked})}
-            />
-            <Label htmlFor="fixed">Item fixo</Label>
-          </div>
+          <BudgetFormFields
+            formData={formData}
+            setFormData={setFormData}
+            categories={categories || []}
+            type={type}
+          />
 
           <div className="flex justify-end space-x-2">
             <Button type="button" variant="outline" onClick={handleClose}>
