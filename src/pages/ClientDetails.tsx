@@ -1,10 +1,11 @@
-
 import { useParams, Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
+import { useState } from "react";
+import EditClientDialog from "@/components/EditClientDialog";
 import { 
   ArrowLeft, 
   User, 
@@ -16,11 +17,13 @@ import {
   FileText,
   TrendingUp,
   PiggyBank,
-  Scale
+  Scale,
+  Edit
 } from "lucide-react";
 
 export default function ClientDetails() {
   const { id } = useParams<{ id: string }>();
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
 
   const { data: client, isLoading } = useQuery({
     queryKey: ['client', id],
@@ -126,17 +129,27 @@ export default function ClientDetails() {
   return (
     <div className="container mx-auto px-6 py-8">
       <div className="max-w-6xl mx-auto">
-        <div className="flex items-center space-x-4 mb-8">
-          <Link to="/">
-            <Button variant="outline" className="flex items-center space-x-2">
-              <ArrowLeft className="h-4 w-4" />
-              <span>Voltar</span>
-            </Button>
-          </Link>
-          <h1 className="text-3xl font-bold text-gray-900">{client.name}</h1>
-          <Badge variant={client.has_planning ? "default" : "secondary"}>
-            {client.has_planning ? "Com planejamento" : "Sem plano definido"}
-          </Badge>
+        <div className="flex items-center justify-between mb-8">
+          <div className="flex items-center space-x-4">
+            <Link to="/">
+              <Button variant="outline" className="flex items-center space-x-2">
+                <ArrowLeft className="h-4 w-4" />
+                <span>Voltar</span>
+              </Button>
+            </Link>
+            <h1 className="text-3xl font-bold text-gray-900">{client.name}</h1>
+            <Badge variant={client.has_planning ? "default" : "secondary"}>
+              {client.has_planning ? "Com planejamento" : "Sem plano definido"}
+            </Badge>
+          </div>
+          
+          <Button 
+            onClick={() => setEditDialogOpen(true)}
+            className="flex items-center space-x-2"
+          >
+            <Edit className="h-4 w-4" />
+            <span>Editar Cliente</span>
+          </Button>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -233,6 +246,13 @@ export default function ClientDetails() {
             </Card>
           </div>
         </div>
+
+        {/* Dialog de Edição */}
+        <EditClientDialog
+          isOpen={editDialogOpen}
+          onClose={() => setEditDialogOpen(false)}
+          client={client}
+        />
       </div>
     </div>
   );
