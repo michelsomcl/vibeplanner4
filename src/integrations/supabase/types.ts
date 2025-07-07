@@ -176,6 +176,54 @@ export type Database = {
         }
         Relationships: []
       }
+      debt_payments: {
+        Row: {
+          client_id: string
+          created_at: string
+          debt_id: string
+          id: string
+          observations: string | null
+          payment_amount: number
+          payment_date: string
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          debt_id: string
+          id?: string
+          observations?: string | null
+          payment_amount: number
+          payment_date?: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          debt_id?: string
+          id?: string
+          observations?: string | null
+          payment_amount?: number
+          payment_date?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "debt_payments_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "debt_payments_debt_id_fkey"
+            columns: ["debt_id"]
+            isOneToOne: false
+            referencedRelation: "debts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       debts: {
         Row: {
           client_id: string
@@ -187,6 +235,7 @@ export type Database = {
           interest_rate: number
           name: string
           observations: string | null
+          payment_observations: string | null
           payoff_method: string | null
           remaining_installments: number
           status: string
@@ -203,6 +252,7 @@ export type Database = {
           interest_rate: number
           name: string
           observations?: string | null
+          payment_observations?: string | null
           payoff_method?: string | null
           remaining_installments: number
           status?: string
@@ -219,6 +269,7 @@ export type Database = {
           interest_rate?: number
           name?: string
           observations?: string | null
+          payment_observations?: string | null
           payoff_method?: string | null
           remaining_installments?: number
           status?: string
@@ -319,6 +370,53 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "heirs_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      monthly_budget_summary: {
+        Row: {
+          client_id: string
+          commitment_percentage: number | null
+          created_at: string
+          id: string
+          month_year: string
+          total_actual_expenses: number | null
+          total_actual_income: number | null
+          total_planned_expenses: number | null
+          total_planned_income: number | null
+          updated_at: string
+        }
+        Insert: {
+          client_id: string
+          commitment_percentage?: number | null
+          created_at?: string
+          id?: string
+          month_year: string
+          total_actual_expenses?: number | null
+          total_actual_income?: number | null
+          total_planned_expenses?: number | null
+          total_planned_income?: number | null
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string
+          commitment_percentage?: number | null
+          created_at?: string
+          id?: string
+          month_year?: string
+          total_actual_expenses?: number | null
+          total_actual_income?: number | null
+          total_planned_expenses?: number | null
+          total_planned_income?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_budget_summary_client_id_fkey"
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
