@@ -1,50 +1,60 @@
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { AlertCircle, Target, TrendingDown, Clock, CheckCircle } from "lucide-react";
-
 interface DebtDiagnosisProps {
   debts: any[];
   monthlyIncome?: number;
 }
-
-const DebtDiagnosis = ({ debts, monthlyIncome = 0 }: DebtDiagnosisProps) => {
+const DebtDiagnosis = ({
+  debts,
+  monthlyIncome = 0
+}: DebtDiagnosisProps) => {
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
     }).format(value);
   };
-
   const activeDebts = debts.filter(debt => debt.status === 'active');
   const totalDebt = activeDebts.reduce((sum, debt) => sum + debt.total_amount, 0);
   const totalMonthlyPayment = activeDebts.reduce((sum, debt) => sum + debt.installment_value, 0);
-  const debtToIncomeRatio = monthlyIncome > 0 ? (totalMonthlyPayment / monthlyIncome) * 100 : 0;
+  const debtToIncomeRatio = monthlyIncome > 0 ? totalMonthlyPayment / monthlyIncome * 100 : 0;
 
   // Ordenar dívidas para método snowball (menor saldo) e avalanche (maior juros)
   const snowballOrder = [...activeDebts].sort((a, b) => a.total_amount - b.total_amount);
   const avalancheOrder = [...activeDebts].sort((a, b) => b.interest_rate - a.interest_rate);
 
   // Calcular tempo médio para quitação
-  const averageMonthsToPayoff = activeDebts.length > 0 
-    ? activeDebts.reduce((sum, debt) => sum + debt.remaining_installments, 0) / activeDebts.length 
-    : 0;
+  const averageMonthsToPayoff = activeDebts.length > 0 ? activeDebts.reduce((sum, debt) => sum + debt.remaining_installments, 0) / activeDebts.length : 0;
 
   // Diagnóstico da situação
   const getDiagnosisLevel = () => {
-    if (debtToIncomeRatio >= 50) return { level: 'critical', color: 'bg-red-500', text: 'Crítica' };
-    if (debtToIncomeRatio >= 30) return { level: 'high', color: 'bg-orange-500', text: 'Alta' };
-    if (debtToIncomeRatio >= 15) return { level: 'moderate', color: 'bg-yellow-500', text: 'Moderada' };
-    return { level: 'low', color: 'bg-green-500', text: 'Baixa' };
+    if (debtToIncomeRatio >= 50) return {
+      level: 'critical',
+      color: 'bg-red-500',
+      text: 'Crítica'
+    };
+    if (debtToIncomeRatio >= 30) return {
+      level: 'high',
+      color: 'bg-orange-500',
+      text: 'Alta'
+    };
+    if (debtToIncomeRatio >= 15) return {
+      level: 'moderate',
+      color: 'bg-yellow-500',
+      text: 'Moderada'
+    };
+    return {
+      level: 'low',
+      color: 'bg-green-500',
+      text: 'Baixa'
+    };
   };
-
   const diagnosis = getDiagnosisLevel();
-
   const getRecommendedMethod = () => {
     const highInterestCount = activeDebts.filter(debt => debt.interest_rate > 3).length;
     const totalDebtsCount = activeDebts.length;
-    
     if (highInterestCount / totalDebtsCount > 0.6) {
       return {
         method: 'avalanche',
@@ -57,11 +67,8 @@ const DebtDiagnosis = ({ debts, monthlyIncome = 0 }: DebtDiagnosisProps) => {
       };
     }
   };
-
   const recommendation = getRecommendedMethod();
-
-  return (
-    <div className="space-y-6">
+  return <div className="space-y-6">
       {/* Diagnóstico Geral */}
       <Card>
         <CardHeader>
@@ -79,7 +86,7 @@ const DebtDiagnosis = ({ debts, monthlyIncome = 0 }: DebtDiagnosisProps) => {
             </div>
             <div className="p-4 border rounded-lg text-center">
               <Clock className="h-8 w-8 text-orange-600 mx-auto mb-2" />
-              <p className="text-sm text-gray-600">Pagamento Mensal</p>
+              <p className="text-gray-600 text-sm">Pagamento Mensal das dívidas</p>
               <p className="text-xl font-bold text-orange-600">{formatCurrency(totalMonthlyPayment)}</p>
             </div>
             <div className="p-4 border rounded-lg text-center">
@@ -104,12 +111,7 @@ const DebtDiagnosis = ({ debts, monthlyIncome = 0 }: DebtDiagnosisProps) => {
                 <span className="text-sm font-medium">Comprometimento da Renda</span>
                 <span className="text-sm">{debtToIncomeRatio.toFixed(1)}%</span>
               </div>
-              <Progress 
-                value={Math.min(debtToIncomeRatio, 100)} 
-                className={`h-3 ${debtToIncomeRatio >= 50 ? '[&>div]:bg-red-500' : 
-                  debtToIncomeRatio >= 30 ? '[&>div]:bg-orange-500' : 
-                  debtToIncomeRatio >= 15 ? '[&>div]:bg-yellow-500' : '[&>div]:bg-green-500'}`}
-              />
+              <Progress value={Math.min(debtToIncomeRatio, 100)} className={`h-3 ${debtToIncomeRatio >= 50 ? '[&>div]:bg-red-500' : debtToIncomeRatio >= 30 ? '[&>div]:bg-orange-500' : debtToIncomeRatio >= 15 ? '[&>div]:bg-yellow-500' : '[&>div]:bg-green-500'}`} />
               <p className="text-xs text-gray-500 mt-1">
                 Recomendado: até 30% da renda
               </p>
@@ -137,8 +139,7 @@ const DebtDiagnosis = ({ debts, monthlyIncome = 0 }: DebtDiagnosisProps) => {
           {/* Ordem de Quitação */}
           <div className="space-y-3">
             <h4 className="font-medium">Ordem de Quitação Sugerida:</h4>
-            {(recommendation.method === 'snowball' ? snowballOrder : avalancheOrder).map((debt, index) => (
-              <div key={debt.id} className="flex items-center justify-between p-3 border rounded-lg">
+            {(recommendation.method === 'snowball' ? snowballOrder : avalancheOrder).map((debt, index) => <div key={debt.id} className="flex items-center justify-between p-3 border rounded-lg">
                 <div className="flex items-center gap-3">
                   <Badge variant="outline" className="w-8 h-8 rounded-full flex items-center justify-center">
                     {index + 1}
@@ -152,8 +153,7 @@ const DebtDiagnosis = ({ debts, monthlyIncome = 0 }: DebtDiagnosisProps) => {
                   <p className="font-medium">{formatCurrency(debt.total_amount)}</p>
                   <p className="text-sm text-gray-600">{debt.interest_rate}% a.m.</p>
                 </div>
-              </div>
-            ))}
+              </div>)}
           </div>
         </CardContent>
       </Card>
@@ -198,8 +198,6 @@ const DebtDiagnosis = ({ debts, monthlyIncome = 0 }: DebtDiagnosisProps) => {
           </div>
         </CardContent>
       </Card>
-    </div>
-  );
+    </div>;
 };
-
 export default DebtDiagnosis;
