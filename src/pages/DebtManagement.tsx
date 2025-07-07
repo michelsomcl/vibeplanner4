@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -401,7 +402,7 @@ const DebtManagement = () => {
         onClose={() => setDeleteDialogOpen(false)}
         onConfirm={confirmDelete}
         itemName={debtToDelete?.name || ''}
-        itemType="debt"
+        itemType="despesa"
       />
     </div>
   );
