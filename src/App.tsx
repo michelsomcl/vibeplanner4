@@ -12,6 +12,7 @@ import ClientDetails from "./pages/ClientDetails";
 import DebtManagement from "./pages/DebtManagement";
 import AssetAccumulation from "./pages/AssetAccumulation";
 import MonthlyBudget from "./pages/MonthlyBudget";
+import BudgetHistory from "./pages/BudgetHistory";
 import Retirement from "./pages/Retirement";
 import SuccessionPlanning from "./pages/SuccessionPlanning";
 import FinalReport from "./pages/FinalReport";
@@ -34,6 +35,7 @@ const App = () => (
               <Route path="client/:id/debts" element={<DebtManagement />} />
               <Route path="client/:id/assets" element={<AssetAccumulation />} />
               <Route path="client/:id/budget" element={<MonthlyBudget />} />
+              <Route path="client/:id/budget/history" element={<BudgetHistory />} />
               <Route path="client/:id/retirement" element={<Retirement />} />
               <Route path="client/:id/succession" element={<SuccessionPlanning />} />
               <Route path="client/:id/report" element={<FinalReport />} />

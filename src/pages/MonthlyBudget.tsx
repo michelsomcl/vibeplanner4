@@ -1,10 +1,9 @@
-
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, AlertCircle, Calendar, Lock } from "lucide-react";
+import { Plus, AlertCircle, Calendar, Lock, History } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import BudgetItemForm from "@/components/BudgetItemForm";
@@ -14,6 +13,7 @@ import BudgetItemsList from "@/components/budget/BudgetItemsList";
 
 const MonthlyBudget = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [incomeFormOpen, setIncomeFormOpen] = useState(false);
   const [expenseFormOpen, setExpenseFormOpen] = useState(false);
@@ -54,12 +54,70 @@ const MonthlyBudget = () => {
     },
   });
 
-  // Get current month's budget items
-  const currentMonth = new Date().toISOString().slice(0, 7) + '-01';
-  const { data: budgetItems, isLoading: budgetLoading } = useQuery({
-    queryKey: ['budget-items', id, currentMonth],
+  // Find the current open cycle (no closure record)
+  const { data: currentOpenCycle, isLoading: openCycleLoading } = useQuery({
+    queryKey: ['current-open-cycle', id],
     queryFn: async () => {
-      if (!id) return [];
+      if (!id) return null;
+
+      // Get all possible month cycles and find the one without closure
+      const today = new Date();
+      const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 7) + '-01';
+      
+      // Check if current month is closed
+      const { data: currentClosure } = await supabase
+        .from('budget_closures')
+        .select('*')
+        .eq('client_id', id)
+        .eq('month_year', currentMonth)
+        .maybeSingle();
+
+      if (!currentClosure) {
+        return currentMonth; // Current month is open
+      }
+
+      // If current month is closed, check next month
+      const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1).toISOString().slice(0, 7) + '-01';
+      const { data: nextClosure } = await supabase
+        .from('budget_closures')
+        .select('*')
+        .eq('client_id', id)
+        .eq('month_year', nextMonth)
+        .maybeSingle();
+
+      if (!nextClosure) {
+        return nextMonth; // Next month is open
+      }
+
+      // Continue checking future months until we find an open one
+      let checkMonth = new Date(today.getFullYear(), today.getMonth() + 2, 1);
+      for (let i = 0; i < 12; i++) { // Check up to 12 months ahead
+        const monthStr = checkMonth.toISOString().slice(0, 7) + '-01';
+        const { data: closure } = await supabase
+          .from('budget_closures')
+          .select('*')
+          .eq('client_id', id)
+          .eq('month_year', monthStr)
+          .maybeSingle();
+
+        if (!closure) {
+          return monthStr;
+        }
+
+        checkMonth.setMonth(checkMonth.getMonth() + 1);
+      }
+
+      // If no open cycle found, return current month (fallback)
+      return currentMonth;
+    },
+    enabled: !!id,
+  });
+
+  // Get budget items for the current open cycle
+  const { data: budgetItems, isLoading: budgetLoading } = useQuery({
+    queryKey: ['budget-items', id, currentOpenCycle],
+    queryFn: async () => {
+      if (!id || !currentOpenCycle) return [];
       
       const { data, error } = await supabase
         .from('budget_items')
@@ -71,31 +129,31 @@ const MonthlyBudget = () => {
           )
         `)
         .eq('client_id', id)
-        .eq('month_year', currentMonth);
+        .eq('month_year', currentOpenCycle);
       
       if (error) throw error;
       return data;
     },
-    enabled: !!id,
+    enabled: !!id && !!currentOpenCycle,
   });
 
-  // Check if current month is already closed
-  const { data: monthClosure, isLoading: closureLoading } = useQuery({
-    queryKey: ['budget-closure', id, currentMonth],
+  // Check if current cycle is closed (should be false since we're showing open cycle)
+  const { data: monthClosure } = useQuery({
+    queryKey: ['budget-closure', id, currentOpenCycle],
     queryFn: async () => {
-      if (!id) return null;
+      if (!id || !currentOpenCycle) return null;
       
       const { data, error } = await supabase
         .from('budget_closures')
         .select('*')
         .eq('client_id', id)
-        .eq('month_year', currentMonth)
+        .eq('month_year', currentOpenCycle)
         .maybeSingle();
       
       if (error) throw error;
       return data;
     },
-    enabled: !!id,
+    enabled: !!id && !!currentOpenCycle,
   });
 
   // Initialize categories mutation
@@ -139,7 +197,7 @@ const MonthlyBudget = () => {
   // Close month mutation
   const closeMonthMutation = useMutation({
     mutationFn: async () => {
-      if (!id) throw new Error('ID do cliente não fornecido');
+      if (!id || !currentOpenCycle) throw new Error('Dados necessários não disponíveis');
       
       const income = budgetItems?.filter(item => item.budget_categories?.type === 'income') || [];
       const expenses = budgetItems?.filter(item => item.budget_categories?.type === 'expense') || [];
@@ -154,7 +212,7 @@ const MonthlyBudget = () => {
         .from('budget_closures')
         .insert({
           client_id: id,
-          month_year: currentMonth,
+          month_year: currentOpenCycle,
           total_planned_income: totalPlannedIncome,
           total_actual_income: totalActualIncome,
           total_planned_expenses: totalPlannedExpenses,
@@ -164,8 +222,8 @@ const MonthlyBudget = () => {
       if (closureError) throw closureError;
 
       // Get next month
-      const nextMonthDate = new Date(currentMonth);
-      nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
+      const currentDate = new Date(currentOpenCycle);
+      const nextMonthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
       const nextMonth = nextMonthDate.toISOString().slice(0, 7) + '-01';
 
       // Create new budget items for next month with planned amounts from current month
@@ -188,7 +246,8 @@ const MonthlyBudget = () => {
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budget-closure', id, currentMonth] });
+      queryClient.invalidateQueries({ queryKey: ['current-open-cycle', id] });
+      queryClient.invalidateQueries({ queryKey: ['budget-closure'] });
       queryClient.invalidateQueries({ queryKey: ['budget-items'] });
       toast.success('Mês fechado com sucesso! Novo ciclo iniciado.');
     },
@@ -209,7 +268,7 @@ const MonthlyBudget = () => {
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budget-items', id, currentMonth] });
+      queryClient.invalidateQueries({ queryKey: ['budget-items', id, currentOpenCycle] });
       toast.success('Item excluído com sucesso!');
       setDeleteDialogOpen(false);
       setItemToDelete(null);
@@ -286,7 +345,19 @@ const MonthlyBudget = () => {
     closeMonthMutation.mutate();
   };
 
-  const isLoading = clientLoading || categoriesLoading || budgetLoading || closureLoading;
+  const handleViewHistory = () => {
+    navigate(`/client/${id}/budget/history`);
+  };
+
+  const formatMonthYear = (monthYear: string) => {
+    const date = new Date(monthYear);
+    return date.toLocaleDateString('pt-BR', { 
+      month: 'long', 
+      year: 'numeric' 
+    }).replace(/^\w/, c => c.toUpperCase());
+  };
+
+  const isLoading = clientLoading || categoriesLoading || budgetLoading || openCycleLoading;
   const isMonthClosed = !!monthClosure;
 
   if (isLoading) {
@@ -332,7 +403,7 @@ const MonthlyBudget = () => {
         <div>
           <h1 className="text-3xl font-bold text-primary">Orçamento Mensal</h1>
           <p className="text-gray-600 mt-2">
-            Controle financeiro - {client?.name}
+            {client?.name} - {formatMonthYear(currentOpenCycle || '')}
             {isMonthClosed && (
               <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                 <Lock className="mr-1 h-3 w-3" />
@@ -342,6 +413,14 @@ const MonthlyBudget = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handleViewHistory}
+            className="border-gray-500 text-gray-600 hover:bg-gray-50"
+          >
+            <History className="mr-2 h-4 w-4" />
+            Histórico
+          </Button>
           {!isMonthClosed && (
             <>
               <Button 
@@ -456,6 +535,7 @@ const MonthlyBudget = () => {
             clientId={id!}
             type="income"
             editItem={editingType === 'income' ? editingItem : undefined}
+            monthYear={currentOpenCycle}
           />
           
           <BudgetItemForm
@@ -464,6 +544,7 @@ const MonthlyBudget = () => {
             clientId={id!}
             type="expense"
             editItem={editingType === 'expense' ? editingItem : undefined}
+            monthYear={currentOpenCycle}
           />
 
           <DeleteConfirmDialog
