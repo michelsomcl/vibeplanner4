@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -13,9 +12,10 @@ interface BudgetItemFormProps {
   clientId: string;
   type: 'income' | 'expense';
   editItem?: any;
+  monthYear?: string;
 }
 
-const BudgetItemForm = ({ isOpen, onClose, clientId, type, editItem }: BudgetItemFormProps) => {
+const BudgetItemForm = ({ isOpen, onClose, clientId, type, editItem, monthYear }: BudgetItemFormProps) => {
   const [formData, setFormData] = useState({
     name: '',
     planned_amount: '',
@@ -25,7 +25,7 @@ const BudgetItemForm = ({ isOpen, onClose, clientId, type, editItem }: BudgetIte
   });
 
   const queryClient = useQueryClient();
-  const currentMonth = new Date().toISOString().slice(0, 7) + '-01';
+  const currentMonth = monthYear || new Date().toISOString().slice(0, 7) + '-01';
 
   // Reset form data when editItem changes or dialog opens
   useEffect(() => {
