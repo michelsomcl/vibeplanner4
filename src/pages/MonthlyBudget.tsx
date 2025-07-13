@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, AlertCircle, Calendar, Lock, History } from "lucide-react";
+import { Plus, AlertCircle, Calendar, Lock, History, Copy } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import BudgetItemForm from "@/components/BudgetItemForm";
@@ -137,6 +137,34 @@ const MonthlyBudget = () => {
     enabled: !!id && !!currentOpenCycle,
   });
 
+  // Get previous month data for copying
+  const { data: previousMonthData } = useQuery({
+    queryKey: ['previous-month-items', id, currentOpenCycle],
+    queryFn: async () => {
+      if (!id || !currentOpenCycle) return [];
+      
+      const currentDate = new Date(currentOpenCycle);
+      const previousMonthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+      const previousMonth = previousMonthDate.toISOString().slice(0, 7) + '-01';
+      
+      const { data, error } = await supabase
+        .from('budget_items')
+        .select(`
+          *,
+          budget_categories (
+            name,
+            type
+          )
+        `)
+        .eq('client_id', id)
+        .eq('month_year', previousMonth);
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id && !!currentOpenCycle,
+  });
+
   // Check if current cycle is closed (should be false since we're showing open cycle)
   const { data: monthClosure } = useQuery({
     queryKey: ['budget-closure', id, currentOpenCycle],
@@ -221,39 +249,58 @@ const MonthlyBudget = () => {
 
       if (closureError) throw closureError;
 
-      // Get next month
-      const currentDate = new Date(currentOpenCycle);
-      const nextMonthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1);
-      const nextMonth = nextMonthDate.toISOString().slice(0, 7) + '-01';
-
-      // Create new budget items for next month with planned amounts from current month
-      const nextMonthItems = budgetItems?.map(item => ({
-        client_id: id,
-        category_id: item.category_id,
-        name: item.name,
-        month_year: nextMonth,
-        planned_amount: item.planned_amount || 0,
-        actual_amount: 0,
-        is_fixed: item.is_fixed
-      })) || [];
-
-      if (nextMonthItems.length > 0) {
-        const { error: itemsError } = await supabase
-          .from('budget_items')
-          .insert(nextMonthItems);
-
-        if (itemsError) throw itemsError;
-      }
+      // NOTE: Removido a criação automática de itens para o próximo mês
+      // O usuário pode usar o botão "Copiar do Mês Anterior" quando necessário
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['current-open-cycle', id] });
       queryClient.invalidateQueries({ queryKey: ['budget-closure'] });
       queryClient.invalidateQueries({ queryKey: ['budget-items'] });
-      toast.success('Mês fechado com sucesso! Novo ciclo iniciado.');
+      toast.success('Mês fechado com sucesso!');
     },
     onError: (error) => {
       console.error('Erro ao fechar mês:', error);
       toast.error('Erro ao fechar mês');
+    },
+  });
+
+  // Copy from previous month mutation
+  const copyFromPreviousMonthMutation = useMutation({
+    mutationFn: async () => {
+      if (!id || !currentOpenCycle || !previousMonthData || previousMonthData.length === 0) {
+        throw new Error('Dados necessários não disponíveis');
+      }
+
+      // Check if current month already has items
+      const existingItemsCount = budgetItems?.length || 0;
+      if (existingItemsCount > 0) {
+        throw new Error('O mês atual já possui lançamentos. Limpe os dados primeiro se desejar copiar do mês anterior.');
+      }
+
+      // Create new items for current month with only planned amounts
+      const newItems = previousMonthData.map(item => ({
+        client_id: id,
+        category_id: item.category_id,
+        name: item.name,
+        month_year: currentOpenCycle,
+        planned_amount: item.planned_amount || 0,
+        actual_amount: 0, // Always start with 0 for actual amounts
+        is_fixed: item.is_fixed
+      }));
+
+      const { error } = await supabase
+        .from('budget_items')
+        .insert(newItems);
+
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budget-items', id, currentOpenCycle] });
+      toast.success('Metas e orçamentos copiados do mês anterior com sucesso!');
+    },
+    onError: (error) => {
+      console.error('Erro ao copiar do mês anterior:', error);
+      toast.error(error.message || 'Erro ao copiar dados do mês anterior');
     },
   });
 
@@ -349,6 +396,17 @@ const MonthlyBudget = () => {
     navigate(`/client/${id}/budget/history`);
   };
 
+  const handleCopyFromPreviousMonth = () => {
+    if (!previousMonthData || previousMonthData.length === 0) {
+      toast.error('Não há dados do mês anterior para copiar');
+      return;
+    }
+
+    if (confirm('Deseja copiar as metas e orçamentos do mês anterior? Os valores realizados permanecerão vazios.')) {
+      copyFromPreviousMonthMutation.mutate();
+    }
+  };
+
   const formatMonthYear = (monthYear: string) => {
     const date = new Date(monthYear);
     return date.toLocaleDateString('pt-BR', { 
@@ -421,6 +479,17 @@ const MonthlyBudget = () => {
             <History className="mr-2 h-4 w-4" />
             Histórico
           </Button>
+          {!isMonthClosed && previousMonthData && previousMonthData.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={handleCopyFromPreviousMonth}
+              disabled={copyFromPreviousMonthMutation.isPending}
+              className="border-blue-500 text-blue-600 hover:bg-blue-50"
+            >
+              <Copy className="mr-2 h-4 w-4" />
+              {copyFromPreviousMonthMutation.isPending ? 'Copiando...' : 'Copiar Mês Anterior'}
+            </Button>
+          )}
           {!isMonthClosed && (
             <>
               <Button 
