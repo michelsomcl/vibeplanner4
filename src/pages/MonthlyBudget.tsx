@@ -1,20 +1,19 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Card, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Plus, AlertCircle, Calendar, Lock, History, Copy } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { toast } from "sonner";
-import BudgetItemForm from "@/components/BudgetItemForm";
-import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
+import BudgetHeader from "@/components/budget/BudgetHeader";
+import BudgetAlerts from "@/components/budget/BudgetAlerts";
 import BudgetSummaryCards from "@/components/budget/BudgetSummaryCards";
 import BudgetItemsList from "@/components/budget/BudgetItemsList";
+import BudgetForms from "@/components/budget/BudgetForms";
+import { useBudgetData } from "@/hooks/useBudgetData";
+import { useBudgetMutations } from "@/hooks/useBudgetMutations";
 
 const MonthlyBudget = () => {
   const { id } = useParams();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const [incomeFormOpen, setIncomeFormOpen] = useState(false);
   const [expenseFormOpen, setExpenseFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -22,49 +21,17 @@ const MonthlyBudget = () => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState<any>(null);
 
-  // Get client data
-  const { data: client, isLoading: clientLoading } = useQuery({
-    queryKey: ['client', id],
-    queryFn: async () => {
-      if (!id) throw new Error('ID do cliente não fornecido');
-      
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!id,
-  });
+  const { client, clientLoading, categories, initializeCategories } = useBudgetData(id);
 
-  // Get budget categories
-  const { data: categories, isLoading: categoriesLoading } = useQuery({
-    queryKey: ['budget-categories'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('budget_categories')
-        .select('*')
-        .order('name');
-      
-      if (error) throw error;
-      return data;
-    },
-  });
-
-  // Find the current open cycle (no closure record)
+  // Find the current open cycle
   const { data: currentOpenCycle, isLoading: openCycleLoading } = useQuery({
     queryKey: ['current-open-cycle', id],
     queryFn: async () => {
       if (!id) return null;
 
-      // Get all possible month cycles and find the one without closure
       const today = new Date();
       const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 7) + '-01';
       
-      // Check if current month is closed
       const { data: currentClosure } = await supabase
         .from('budget_closures')
         .select('*')
@@ -73,10 +40,9 @@ const MonthlyBudget = () => {
         .maybeSingle();
 
       if (!currentClosure) {
-        return currentMonth; // Current month is open
+        return currentMonth;
       }
 
-      // If current month is closed, check next month
       const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1).toISOString().slice(0, 7) + '-01';
       const { data: nextClosure } = await supabase
         .from('budget_closures')
@@ -86,12 +52,11 @@ const MonthlyBudget = () => {
         .maybeSingle();
 
       if (!nextClosure) {
-        return nextMonth; // Next month is open
+        return nextMonth;
       }
 
-      // Continue checking future months until we find an open one
       let checkMonth = new Date(today.getFullYear(), today.getMonth() + 2, 1);
-      for (let i = 0; i < 12; i++) { // Check up to 12 months ahead
+      for (let i = 0; i < 12; i++) {
         const monthStr = checkMonth.toISOString().slice(0, 7) + '-01';
         const { data: closure } = await supabase
           .from('budget_closures')
@@ -107,7 +72,6 @@ const MonthlyBudget = () => {
         checkMonth.setMonth(checkMonth.getMonth() + 1);
       }
 
-      // If no open cycle found, return current month (fallback)
       return currentMonth;
     },
     enabled: !!id,
@@ -165,7 +129,7 @@ const MonthlyBudget = () => {
     enabled: !!id && !!currentOpenCycle,
   });
 
-  // Check if current cycle is closed (should be false since we're showing open cycle)
+  // Check if current cycle is closed
   const { data: monthClosure } = useQuery({
     queryKey: ['budget-closure', id, currentOpenCycle],
     queryFn: async () => {
@@ -184,147 +148,8 @@ const MonthlyBudget = () => {
     enabled: !!id && !!currentOpenCycle,
   });
 
-  // Initialize categories mutation
-  const initializeCategories = useMutation({
-    mutationFn: async () => {
-      const defaultCategories = [
-        { name: 'Salário', type: 'income' },
-        { name: 'Freelances', type: 'income' },
-        { name: 'Rendimentos', type: 'income' },
-        { name: 'Outros Rendimentos', type: 'income' },
-        { name: 'Moradia', type: 'expense' },
-        { name: 'Alimentação', type: 'expense' },
-        { name: 'Transporte', type: 'expense' },
-        { name: 'Saúde', type: 'expense' },
-        { name: 'Educação', type: 'expense' },
-        { name: 'Lazer', type: 'expense' },
-        { name: 'Vestuário', type: 'expense' },
-        { name: 'Financeiro', type: 'expense' },
-        { name: 'Outros', type: 'expense' }
-      ];
-
-      const { error } = await supabase
-        .from('budget_categories')
-        .upsert(defaultCategories, { 
-          onConflict: 'name,type',
-          ignoreDuplicates: true 
-        });
-      
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budget-categories'] });
-      toast.success('Categorias inicializadas com sucesso!');
-    },
-    onError: (error) => {
-      console.error('Erro ao inicializar categorias:', error);
-      toast.error('Erro ao inicializar categorias');
-    },
-  });
-
-  // Close month mutation
-  const closeMonthMutation = useMutation({
-    mutationFn: async () => {
-      if (!id || !currentOpenCycle) throw new Error('Dados necessários não disponíveis');
-      
-      const income = budgetItems?.filter(item => item.budget_categories?.type === 'income') || [];
-      const expenses = budgetItems?.filter(item => item.budget_categories?.type === 'expense') || [];
-
-      const totalPlannedIncome = income.reduce((sum, item) => sum + (item.planned_amount || 0), 0);
-      const totalActualIncome = income.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
-      const totalPlannedExpenses = expenses.reduce((sum, item) => sum + (item.planned_amount || 0), 0);
-      const totalActualExpenses = expenses.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
-
-      // Save closure data
-      const { error: closureError } = await supabase
-        .from('budget_closures')
-        .insert({
-          client_id: id,
-          month_year: currentOpenCycle,
-          total_planned_income: totalPlannedIncome,
-          total_actual_income: totalActualIncome,
-          total_planned_expenses: totalPlannedExpenses,
-          total_actual_expenses: totalActualExpenses,
-        });
-
-      if (closureError) throw closureError;
-
-      // NOTE: Removido a criação automática de itens para o próximo mês
-      // O usuário pode usar o botão "Copiar do Mês Anterior" quando necessário
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['current-open-cycle', id] });
-      queryClient.invalidateQueries({ queryKey: ['budget-closure'] });
-      queryClient.invalidateQueries({ queryKey: ['budget-items'] });
-      toast.success('Mês fechado com sucesso!');
-    },
-    onError: (error) => {
-      console.error('Erro ao fechar mês:', error);
-      toast.error('Erro ao fechar mês');
-    },
-  });
-
-  // Copy from previous month mutation
-  const copyFromPreviousMonthMutation = useMutation({
-    mutationFn: async () => {
-      if (!id || !currentOpenCycle || !previousMonthData || previousMonthData.length === 0) {
-        throw new Error('Dados necessários não disponíveis');
-      }
-
-      // Check if current month already has items
-      const existingItemsCount = budgetItems?.length || 0;
-      if (existingItemsCount > 0) {
-        throw new Error('O mês atual já possui lançamentos. Limpe os dados primeiro se desejar copiar do mês anterior.');
-      }
-
-      // Create new items for current month with only planned amounts
-      const newItems = previousMonthData.map(item => ({
-        client_id: id,
-        category_id: item.category_id,
-        name: item.name,
-        month_year: currentOpenCycle,
-        planned_amount: item.planned_amount || 0,
-        actual_amount: 0, // Always start with 0 for actual amounts
-        is_fixed: item.is_fixed
-      }));
-
-      const { error } = await supabase
-        .from('budget_items')
-        .insert(newItems);
-
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budget-items', id, currentOpenCycle] });
-      toast.success('Metas e orçamentos copiados do mês anterior com sucesso!');
-    },
-    onError: (error) => {
-      console.error('Erro ao copiar do mês anterior:', error);
-      toast.error(error.message || 'Erro ao copiar dados do mês anterior');
-    },
-  });
-
-  // Delete item mutation
-  const deleteItemMutation = useMutation({
-    mutationFn: async (itemId: string) => {
-      const { error } = await supabase
-        .from('budget_items')
-        .delete()
-        .eq('id', itemId);
-      
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['budget-items', id, currentOpenCycle] });
-      toast.success('Item excluído com sucesso!');
-      setDeleteDialogOpen(false);
-      setItemToDelete(null);
-    },
-    onError: (error) => {
-      console.error('Erro ao excluir item:', error);
-      toast.error('Erro ao excluir item');
-    },
-  });
+  const { closeMonthMutation, copyFromPreviousMonthMutation, deleteItemMutation } = 
+    useBudgetMutations(id, currentOpenCycle);
 
   // Initialize categories if empty
   useEffect(() => {
@@ -379,6 +204,8 @@ const MonthlyBudget = () => {
   const confirmDelete = () => {
     if (itemToDelete) {
       deleteItemMutation.mutate(itemToDelete.id);
+      setDeleteDialogOpen(false);
+      setItemToDelete(null);
     }
   };
 
@@ -389,7 +216,9 @@ const MonthlyBudget = () => {
   };
 
   const handleCloseMonth = () => {
-    closeMonthMutation.mutate();
+    if (budgetItems) {
+      closeMonthMutation.mutate(budgetItems);
+    }
   };
 
   const handleViewHistory = () => {
@@ -398,24 +227,18 @@ const MonthlyBudget = () => {
 
   const handleCopyFromPreviousMonth = () => {
     if (!previousMonthData || previousMonthData.length === 0) {
-      toast.error('Não há dados do mês anterior para copiar');
       return;
     }
 
     if (confirm('Deseja copiar as metas e orçamentos do mês anterior? Os valores realizados permanecerão vazios.')) {
-      copyFromPreviousMonthMutation.mutate();
+      copyFromPreviousMonthMutation.mutate({
+        previousMonthData,
+        budgetItems: budgetItems || []
+      });
     }
   };
 
-  const formatMonthYear = (monthYear: string) => {
-    const date = new Date(monthYear);
-    return date.toLocaleDateString('pt-BR', { 
-      month: 'long', 
-      year: 'numeric' 
-    }).replace(/^\w/, c => c.toUpperCase());
-  };
-
-  const isLoading = clientLoading || categoriesLoading || budgetLoading || openCycleLoading;
+  const isLoading = clientLoading || budgetLoading || openCycleLoading;
   const isMonthClosed = !!monthClosure;
 
   if (isLoading) {
@@ -456,92 +279,27 @@ const MonthlyBudget = () => {
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-primary">Orçamento Mensal</h1>
-          <p className="text-gray-600 mt-2">
-            {client?.name} - {formatMonthYear(currentOpenCycle || '')}
-            {isMonthClosed && (
-              <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-                <Lock className="mr-1 h-3 w-3" />
-                Mês Fechado
-              </span>
-            )}
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={handleViewHistory}
-            className="border-gray-500 text-gray-600 hover:bg-gray-50"
-          >
-            <History className="mr-2 h-4 w-4" />
-            Histórico
-          </Button>
-          {!isMonthClosed && previousMonthData && previousMonthData.length > 0 && (
-            <Button
-              variant="outline"
-              onClick={handleCopyFromPreviousMonth}
-              disabled={copyFromPreviousMonthMutation.isPending}
-              className="border-blue-500 text-blue-600 hover:bg-blue-50"
-            >
-              <Copy className="mr-2 h-4 w-4" />
-              {copyFromPreviousMonthMutation.isPending ? 'Copiando...' : 'Copiar Mês Anterior'}
-            </Button>
-          )}
-          {!isMonthClosed && (
-            <>
-              <Button 
-                variant="outline" 
-                className="border-green-500 text-green-600 hover:bg-green-50"
-                onClick={() => setIncomeFormOpen(true)}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Nova Receita
-              </Button>
-              <Button 
-                variant="outline" 
-                className="border-red-500 text-red-600 hover:bg-red-50"
-                onClick={() => setExpenseFormOpen(true)}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Nova Despesa
-              </Button>
-            </>
-          )}
-          {!isMonthClosed && budgetItems && budgetItems.length > 0 && (
-            <Button 
-              onClick={handleCloseMonth}
-              disabled={closeMonthMutation.isPending}
-              className="bg-primary hover:bg-primary/90"
-            >
-              <Calendar className="mr-2 h-4 w-4" />
-              {closeMonthMutation.isPending ? 'Fechando...' : 'Fechar Mês'}
-            </Button>
-          )}
-        </div>
-      </div>
+      <BudgetHeader
+        clientName={client?.name || ''}
+        monthYear={currentOpenCycle || ''}
+        isMonthClosed={isMonthClosed}
+        hasPreviousMonthData={!!(previousMonthData && previousMonthData.length > 0)}
+        isCopyingFromPrevious={copyFromPreviousMonthMutation.isPending}
+        onViewHistory={handleViewHistory}
+        onCopyFromPreviousMonth={handleCopyFromPreviousMonth}
+        onAddIncome={() => setIncomeFormOpen(true)}
+        onAddExpense={() => setExpenseFormOpen(true)}
+        onCloseMonth={handleCloseMonth}
+        isClosingMonth={closeMonthMutation.isPending}
+        hasBudgetItems={!!(budgetItems && budgetItems.length > 0)}
+      />
 
-      {/* Month Closed Alert */}
-      {isMonthClosed && (
-        <Card className="border-blue-200 bg-blue-50">
-          <CardContent className="p-6">
-            <div className="flex items-start gap-4">
-              <Lock className="h-6 w-6 text-blue-600 mt-1" />
-              <div>
-                <h3 className="font-semibold text-blue-800">Mês Fechado</h3>
-                <p className="text-blue-700 text-sm mt-1">
-                  Este mês foi fechado em {new Date(monthClosure.closure_date).toLocaleDateString('pt-BR')}. 
-                  Os dados foram salvos no histórico e não podem mais ser editados.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <BudgetAlerts
+        isMonthClosed={isMonthClosed}
+        closureDate={monthClosure?.closure_date}
+        actualBalance={actualBalance}
+      />
 
-      {/* Summary Cards */}
       <BudgetSummaryCards
         totalActualIncome={totalActualIncome}
         totalPlannedIncome={totalPlannedIncome}
@@ -552,24 +310,6 @@ const MonthlyBudget = () => {
         formatCurrency={formatCurrency}
       />
 
-      {/* Alert for negative balance */}
-      {actualBalance < 0 && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="p-6">
-            <div className="flex items-start gap-4">
-              <AlertCircle className="h-6 w-6 text-red-600 mt-1" />
-              <div>
-                <h3 className="font-semibold text-red-800">Atenção: Orçamento no Vermelho</h3>
-                <p className="text-red-700 text-sm mt-1">
-                  As despesas estão superando as receitas. Revise o orçamento e identifique oportunidades de redução de custos.
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Income Section */}
       <BudgetItemsList
         items={income}
         type="income"
@@ -582,7 +322,6 @@ const MonthlyBudget = () => {
         isReadOnly={isMonthClosed}
       />
 
-      {/* Expenses Section */}
       <BudgetItemsList
         items={expenses}
         type="expense"
@@ -595,36 +334,20 @@ const MonthlyBudget = () => {
         isReadOnly={isMonthClosed}
       />
 
-      {/* Forms */}
-      {!isMonthClosed && (
-        <>
-          <BudgetItemForm
-            isOpen={incomeFormOpen}
-            onClose={handleFormClose}
-            clientId={id!}
-            type="income"
-            editItem={editingType === 'income' ? editingItem : undefined}
-            monthYear={currentOpenCycle}
-          />
-          
-          <BudgetItemForm
-            isOpen={expenseFormOpen}
-            onClose={handleFormClose}
-            clientId={id!}
-            type="expense"
-            editItem={editingType === 'expense' ? editingItem : undefined}
-            monthYear={currentOpenCycle}
-          />
-
-          <DeleteConfirmDialog
-            isOpen={deleteDialogOpen}
-            onClose={() => setDeleteDialogOpen(false)}
-            onConfirm={confirmDelete}
-            itemName={itemToDelete?.name || ''}
-            itemType={itemToDelete?.budget_categories?.type === 'income' ? 'receita' : 'despesa'}
-          />
-        </>
-      )}
+      <BudgetForms
+        incomeFormOpen={incomeFormOpen}
+        expenseFormOpen={expenseFormOpen}
+        deleteDialogOpen={deleteDialogOpen}
+        editingItem={editingItem}
+        editingType={editingType}
+        itemToDelete={itemToDelete}
+        clientId={id!}
+        monthYear={currentOpenCycle}
+        isReadOnly={isMonthClosed}
+        onFormClose={handleFormClose}
+        onDeleteClose={() => setDeleteDialogOpen(false)}
+        onConfirmDelete={confirmDelete}
+      />
     </div>
   );
 };
