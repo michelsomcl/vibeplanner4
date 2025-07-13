@@ -4,7 +4,7 @@ import { useParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus, AlertCircle } from "lucide-react";
+import { Plus, AlertCircle, Calendar, Lock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import BudgetItemForm from "@/components/BudgetItemForm";
@@ -79,6 +79,25 @@ const MonthlyBudget = () => {
     enabled: !!id,
   });
 
+  // Check if current month is already closed
+  const { data: monthClosure, isLoading: closureLoading } = useQuery({
+    queryKey: ['budget-closure', id, currentMonth],
+    queryFn: async () => {
+      if (!id) return null;
+      
+      const { data, error } = await supabase
+        .from('budget_closures')
+        .select('*')
+        .eq('client_id', id)
+        .eq('month_year', currentMonth)
+        .maybeSingle();
+      
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!id,
+  });
+
   // Initialize categories mutation
   const initializeCategories = useMutation({
     mutationFn: async () => {
@@ -114,6 +133,68 @@ const MonthlyBudget = () => {
     onError: (error) => {
       console.error('Erro ao inicializar categorias:', error);
       toast.error('Erro ao inicializar categorias');
+    },
+  });
+
+  // Close month mutation
+  const closeMonthMutation = useMutation({
+    mutationFn: async () => {
+      if (!id) throw new Error('ID do cliente não fornecido');
+      
+      const income = budgetItems?.filter(item => item.budget_categories?.type === 'income') || [];
+      const expenses = budgetItems?.filter(item => item.budget_categories?.type === 'expense') || [];
+
+      const totalPlannedIncome = income.reduce((sum, item) => sum + (item.planned_amount || 0), 0);
+      const totalActualIncome = income.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
+      const totalPlannedExpenses = expenses.reduce((sum, item) => sum + (item.planned_amount || 0), 0);
+      const totalActualExpenses = expenses.reduce((sum, item) => sum + (item.actual_amount || 0), 0);
+
+      // Save closure data
+      const { error: closureError } = await supabase
+        .from('budget_closures')
+        .insert({
+          client_id: id,
+          month_year: currentMonth,
+          total_planned_income: totalPlannedIncome,
+          total_actual_income: totalActualIncome,
+          total_planned_expenses: totalPlannedExpenses,
+          total_actual_expenses: totalActualExpenses,
+        });
+
+      if (closureError) throw closureError;
+
+      // Get next month
+      const nextMonthDate = new Date(currentMonth);
+      nextMonthDate.setMonth(nextMonthDate.getMonth() + 1);
+      const nextMonth = nextMonthDate.toISOString().slice(0, 7) + '-01';
+
+      // Create new budget items for next month with planned amounts from current month
+      const nextMonthItems = budgetItems?.map(item => ({
+        client_id: id,
+        category_id: item.category_id,
+        name: item.name,
+        month_year: nextMonth,
+        planned_amount: item.planned_amount || 0,
+        actual_amount: 0,
+        is_fixed: item.is_fixed
+      })) || [];
+
+      if (nextMonthItems.length > 0) {
+        const { error: itemsError } = await supabase
+          .from('budget_items')
+          .insert(nextMonthItems);
+
+        if (itemsError) throw itemsError;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['budget-closure', id, currentMonth] });
+      queryClient.invalidateQueries({ queryKey: ['budget-items'] });
+      toast.success('Mês fechado com sucesso! Novo ciclo iniciado.');
+    },
+    onError: (error) => {
+      console.error('Erro ao fechar mês:', error);
+      toast.error('Erro ao fechar mês');
     },
   });
 
@@ -201,7 +282,12 @@ const MonthlyBudget = () => {
     setEditingItem(null);
   };
 
-  const isLoading = clientLoading || categoriesLoading || budgetLoading;
+  const handleCloseMonth = () => {
+    closeMonthMutation.mutate();
+  };
+
+  const isLoading = clientLoading || categoriesLoading || budgetLoading || closureLoading;
+  const isMonthClosed = !!monthClosure;
 
   if (isLoading) {
     return (
@@ -245,27 +331,67 @@ const MonthlyBudget = () => {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-primary">Orçamento Mensal</h1>
-          <p className="text-gray-600 mt-2">Controle financeiro - {client?.name}</p>
+          <p className="text-gray-600 mt-2">
+            Controle financeiro - {client?.name}
+            {isMonthClosed && (
+              <span className="ml-2 inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                <Lock className="mr-1 h-3 w-3" />
+                Mês Fechado
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            className="border-green-500 text-green-600 hover:bg-green-50"
-            onClick={() => setIncomeFormOpen(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Nova Receita
-          </Button>
-          <Button 
-            variant="outline" 
-            className="border-red-500 text-red-600 hover:bg-red-50"
-            onClick={() => setExpenseFormOpen(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Nova Despesa
-          </Button>
+          {!isMonthClosed && (
+            <>
+              <Button 
+                variant="outline" 
+                className="border-green-500 text-green-600 hover:bg-green-50"
+                onClick={() => setIncomeFormOpen(true)}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Nova Receita
+              </Button>
+              <Button 
+                variant="outline" 
+                className="border-red-500 text-red-600 hover:bg-red-50"
+                onClick={() => setExpenseFormOpen(true)}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Nova Despesa
+              </Button>
+            </>
+          )}
+          {!isMonthClosed && budgetItems && budgetItems.length > 0 && (
+            <Button 
+              onClick={handleCloseMonth}
+              disabled={closeMonthMutation.isPending}
+              className="bg-primary hover:bg-primary/90"
+            >
+              <Calendar className="mr-2 h-4 w-4" />
+              {closeMonthMutation.isPending ? 'Fechando...' : 'Fechar Mês'}
+            </Button>
+          )}
         </div>
       </div>
+
+      {/* Month Closed Alert */}
+      {isMonthClosed && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardContent className="p-6">
+            <div className="flex items-start gap-4">
+              <Lock className="h-6 w-6 text-blue-600 mt-1" />
+              <div>
+                <h3 className="font-semibold text-blue-800">Mês Fechado</h3>
+                <p className="text-blue-700 text-sm mt-1">
+                  Este mês foi fechado em {new Date(monthClosure.closure_date).toLocaleDateString('pt-BR')}. 
+                  Os dados foram salvos no histórico e não podem mais ser editados.
+                </p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Summary Cards */}
       <BudgetSummaryCards
@@ -305,6 +431,7 @@ const MonthlyBudget = () => {
         onAddItem={() => setIncomeFormOpen(true)}
         onEditItem={(item) => handleEditItem(item, 'income')}
         onDeleteItem={handleDeleteItem}
+        isReadOnly={isMonthClosed}
       />
 
       {/* Expenses Section */}
@@ -317,32 +444,37 @@ const MonthlyBudget = () => {
         onAddItem={() => setExpenseFormOpen(true)}
         onEditItem={(item) => handleEditItem(item, 'expense')}
         onDeleteItem={handleDeleteItem}
+        isReadOnly={isMonthClosed}
       />
 
       {/* Forms */}
-      <BudgetItemForm
-        isOpen={incomeFormOpen}
-        onClose={handleFormClose}
-        clientId={id!}
-        type="income"
-        editItem={editingType === 'income' ? editingItem : undefined}
-      />
-      
-      <BudgetItemForm
-        isOpen={expenseFormOpen}
-        onClose={handleFormClose}
-        clientId={id!}
-        type="expense"
-        editItem={editingType === 'expense' ? editingItem : undefined}
-      />
+      {!isMonthClosed && (
+        <>
+          <BudgetItemForm
+            isOpen={incomeFormOpen}
+            onClose={handleFormClose}
+            clientId={id!}
+            type="income"
+            editItem={editingType === 'income' ? editingItem : undefined}
+          />
+          
+          <BudgetItemForm
+            isOpen={expenseFormOpen}
+            onClose={handleFormClose}
+            clientId={id!}
+            type="expense"
+            editItem={editingType === 'expense' ? editingItem : undefined}
+          />
 
-      <DeleteConfirmDialog
-        isOpen={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-        onConfirm={confirmDelete}
-        itemName={itemToDelete?.name || ''}
-        itemType={itemToDelete?.budget_categories?.type === 'income' ? 'receita' : 'despesa'}
-      />
+          <DeleteConfirmDialog
+            isOpen={deleteDialogOpen}
+            onClose={() => setDeleteDialogOpen(false)}
+            onConfirm={confirmDelete}
+            itemName={itemToDelete?.name || ''}
+            itemType={itemToDelete?.budget_categories?.type === 'income' ? 'receita' : 'despesa'}
+          />
+        </>
+      )}
     </div>
   );
 };

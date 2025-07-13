@@ -2,8 +2,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Progress } from "@/components/ui/progress";
-import { Plus, TrendingUp, TrendingDown, Edit, Trash } from "lucide-react";
+import { Plus, Edit, Trash2, TrendingUp, TrendingDown } from "lucide-react";
 
 interface BudgetItemsListProps {
   items: any[];
@@ -14,6 +13,7 @@ interface BudgetItemsListProps {
   onAddItem: () => void;
   onEditItem: (item: any) => void;
   onDeleteItem: (item: any) => void;
+  isReadOnly?: boolean;
 }
 
 const BudgetItemsList = ({
@@ -24,96 +24,95 @@ const BudgetItemsList = ({
   getVariance,
   onAddItem,
   onEditItem,
-  onDeleteItem
+  onDeleteItem,
+  isReadOnly = false
 }: BudgetItemsListProps) => {
-  const isIncome = type === 'income';
-  const title = isIncome ? 'Receitas' : 'Despesas';
-  const icon = isIncome ? TrendingUp : TrendingDown;
-  const iconColor = isIncome ? 'text-green-600' : 'text-red-600';
-  const emptyMessage = `Nenhum${isIncome ? 'a receita' : 'a despesa'} cadastrad${isIncome ? 'a' : 'a'} para este mês.`;
-  const addButtonText = `Adicionar ${isIncome ? 'Receita' : 'Despesa'}`;
-
+  const title = type === 'income' ? 'Receitas' : 'Despesas';
+  const icon = type === 'income' ? TrendingUp : TrendingDown;
+  const colorClass = type === 'income' ? 'text-green-600' : 'text-red-600';
   const IconComponent = icon;
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <IconComponent className={`h-5 w-5 ${iconColor}`} />
-          {title}
-        </CardTitle>
+        <div className="flex items-center justify-between">
+          <CardTitle className={`flex items-center gap-2 ${colorClass}`}>
+            <IconComponent className="h-5 w-5" />
+            {title}
+          </CardTitle>
+          {!isReadOnly && (
+            <Button variant="outline" size="sm" onClick={onAddItem}>
+              <Plus className="h-4 w-4 mr-2" />
+              Adicionar
+            </Button>
+          )}
+        </div>
       </CardHeader>
       <CardContent>
         {items.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            <p>{emptyMessage}</p>
-            <Button 
-              className="mt-4" 
-              variant="outline"
-              onClick={onAddItem}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              {addButtonText}
-            </Button>
+            <p>Nenhum item cadastrado</p>
+            {!isReadOnly && (
+              <Button variant="outline" className="mt-4" onClick={onAddItem}>
+                <Plus className="h-4 w-4 mr-2" />
+                Adicionar {type === 'income' ? 'Receita' : 'Despesa'}
+              </Button>
+            )}
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             {items.map((item) => {
               const variance = getVariance(item.planned_amount || 0, item.actual_amount || 0);
-              const progressValue = isIncome 
-                ? 100 
-                : (item.planned_amount || 0) > 0 ? ((item.actual_amount || 0) / (item.planned_amount || 0)) * 100 : 0;
+              const varianceColor = variance > 0 ? 'text-green-600' : variance < 0 ? 'text-red-600' : 'text-gray-600';
               
               return (
-                <div key={item.id} className={`p-4 border rounded-lg hover:bg-gray-50 ${!isIncome ? 'space-y-2' : ''}`}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-4">
-                      <div>
-                        <p className="font-medium">{item.name}</p>
-                        <Badge className={getCategoryColor(item.budget_categories?.name || '')} variant="secondary">
-                          {item.budget_categories?.name}
+                <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-3 mb-2">
+                      <h4 className="font-medium">{item.name}</h4>
+                      <Badge className={getCategoryColor(item.budget_categories?.name || '')}>
+                        {item.budget_categories?.name}
+                      </Badge>
+                      {item.is_fixed && (
+                        <Badge variant="outline" className="text-xs">
+                          Fixo
                         </Badge>
-                      </div>
+                      )}
                     </div>
-                    
-                    <div className="flex items-center gap-6">
-                      <div className="text-right">
+                    <div className="grid grid-cols-3 gap-4 text-sm">
+                      <div>
+                        <p className="text-gray-500">Planejado</p>
+                        <p className="font-medium">{formatCurrency(item.planned_amount || 0)}</p>
+                      </div>
+                      <div>
+                        <p className="text-gray-500">Realizado</p>
                         <p className="font-medium">{formatCurrency(item.actual_amount || 0)}</p>
-                        <p className="text-sm text-gray-500">
-                          {isIncome ? 'Meta' : 'Orçado'}: {formatCurrency(item.planned_amount || 0)}
-                        </p>
                       </div>
-                      
-                      <div className="text-right min-w-[80px]">
-                        <p className={`text-sm font-medium ${
-                          isIncome 
-                            ? (variance >= 0 ? 'text-green-600' : 'text-red-600')
-                            : (variance <= 0 ? 'text-green-600' : 'text-red-600')
-                        }`}>
-                          {variance >= 0 ? '+' : ''}{variance.toFixed(1)}%
+                      <div>
+                        <p className="text-gray-500">Variação</p>
+                        <p className={`font-medium ${varianceColor}`}>
+                          {variance > 0 ? '+' : ''}{variance.toFixed(1)}%
                         </p>
-                      </div>
-                      
-                      <div className="flex gap-2">
-                        <Button variant="outline" size="sm" onClick={() => onEditItem(item)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button variant="outline" size="sm" onClick={() => onDeleteItem(item)}>
-                          <Trash className="h-4 w-4" />
-                        </Button>
                       </div>
                     </div>
                   </div>
-                  
-                  {!isIncome && (
-                    <div className="space-y-1">
-                      <Progress 
-                        value={Math.min(progressValue, 100)} 
-                        className={`h-2 ${progressValue > 100 ? '[&>div]:bg-red-500' : '[&>div]:bg-blue-500'}`}
-                      />
-                      <p className="text-xs text-gray-500">
-                        {progressValue.toFixed(1)}% do orçado
-                      </p>
+                  {!isReadOnly && (
+                    <div className="flex items-center gap-2 ml-4">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onEditItem(item)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => onDeleteItem(item)}
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
                     </div>
                   )}
                 </div>
