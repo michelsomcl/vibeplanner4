@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -23,7 +22,7 @@ const MonthlyBudget = () => {
 
   const { client, clientLoading, categories, initializeCategories } = useBudgetData(id);
 
-  // Find the current open cycle - simplified logic
+  // Get the current month as the default open cycle
   const { data: currentOpenCycle, isLoading: openCycleLoading } = useQuery({
     queryKey: ['current-open-cycle', id],
     queryFn: async () => {
@@ -32,9 +31,10 @@ const MonthlyBudget = () => {
       const today = new Date();
       const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 7) + '-01';
       
-      console.log('Checking current month:', currentMonth);
+      console.log('Current month (should be default):', currentMonth);
       
-      // Check if current month is closed
+      // Always start with current month for new budgets
+      // Only check if it's closed to potentially move to next month
       const { data: currentClosure } = await supabase
         .from('budget_closures')
         .select('*')
@@ -42,15 +42,15 @@ const MonthlyBudget = () => {
         .eq('month_year', currentMonth)
         .maybeSingle();
 
-      console.log('Current month closure:', currentClosure);
+      console.log('Current month closure status:', currentClosure);
 
-      // If current month is not closed, use it
+      // If current month is not closed, always use it (default behavior)
       if (!currentClosure) {
-        console.log('Using current month:', currentMonth);
+        console.log('Using current month (not closed):', currentMonth);
         return currentMonth;
       }
 
-      // If current month is closed, check next month
+      // If current month is closed, check if next month exists and is open
       const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1).toISOString().slice(0, 7) + '-01';
       
       console.log('Checking next month:', nextMonth);
@@ -62,16 +62,15 @@ const MonthlyBudget = () => {
         .eq('month_year', nextMonth)
         .maybeSingle();
 
-      console.log('Next month closure:', nextClosure);
+      console.log('Next month closure status:', nextClosure);
 
       // If next month is not closed, use it
       if (!nextClosure) {
-        console.log('Using next month:', nextMonth);
+        console.log('Using next month (current closed, next open):', nextMonth);
         return nextMonth;
       }
 
-      // If both current and next month are closed, use current month anyway
-      // This prevents jumping too far into the future
+      // If both are closed, default back to current month (user can still view/edit closed months)
       console.log('Both months closed, defaulting to current month:', currentMonth);
       return currentMonth;
     },
