@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -101,7 +100,7 @@ const MonthlyBudget = () => {
     enabled: !!id && !!currentOpenCycle,
   });
 
-  // Get previous month data for copying
+  // Get previous month data for copying - ALWAYS check regardless of current month data
   const { data: previousMonthData } = useQuery({
     queryKey: ['previous-month-items', id, currentOpenCycle],
     queryFn: async () => {
@@ -110,6 +109,8 @@ const MonthlyBudget = () => {
       const currentDate = new Date(currentOpenCycle);
       const previousMonthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
       const previousMonth = previousMonthDate.toISOString().slice(0, 7) + '-01';
+      
+      console.log('Checking previous month data for:', previousMonth);
       
       const { data, error } = await supabase
         .from('budget_items')
@@ -124,6 +125,7 @@ const MonthlyBudget = () => {
         .eq('month_year', previousMonth);
       
       if (error) throw error;
+      console.log('Previous month data found:', data?.length || 0, 'items');
       return data;
     },
     enabled: !!id && !!currentOpenCycle,
@@ -240,6 +242,9 @@ const MonthlyBudget = () => {
 
   const isLoading = clientLoading || budgetLoading || openCycleLoading;
   const isMonthClosed = !!monthClosure;
+  
+  // Check if there's previous month data - this should work regardless of current month status
+  const hasPreviousMonthData = previousMonthData && previousMonthData.length > 0;
 
   if (isLoading) {
     return (
@@ -277,13 +282,19 @@ const MonthlyBudget = () => {
   const plannedBalance = totalPlannedIncome - totalPlannedExpenses;
   const actualBalance = totalActualIncome - totalActualExpenses;
 
+  console.log('Previous month data check:', {
+    hasPreviousMonthData,
+    previousMonthDataLength: previousMonthData?.length || 0,
+    isMonthClosed
+  });
+
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       <BudgetHeader
         clientName={client?.name || ''}
         monthYear={currentOpenCycle || ''}
         isMonthClosed={isMonthClosed}
-        hasPreviousMonthData={!!(previousMonthData && previousMonthData.length > 0)}
+        hasPreviousMonthData={hasPreviousMonthData}
         isCopyingFromPrevious={copyFromPreviousMonthMutation.isPending}
         onViewHistory={handleViewHistory}
         onCopyFromPreviousMonth={handleCopyFromPreviousMonth}
