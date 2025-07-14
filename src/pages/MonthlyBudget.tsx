@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -14,6 +13,7 @@ import { useBudgetMutations } from "@/hooks/useBudgetMutations";
 const MonthlyBudget = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [incomeFormOpen, setIncomeFormOpen] = useState(false);
   const [expenseFormOpen, setExpenseFormOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<any>(null);
@@ -23,68 +23,65 @@ const MonthlyBudget = () => {
 
   const { client, clientLoading, categories, initializeCategories } = useBudgetData(id);
 
-  // Find the current open cycle - simplified logic
-  const { data: currentOpenCycle, isLoading: openCycleLoading } = useQuery({
-    queryKey: ['current-open-cycle', id],
+  // Get available months with data
+  const { data: availableMonths, isLoading: monthsLoading } = useQuery({
+    queryKey: ['available-months', id],
     queryFn: async () => {
-      if (!id) return null;
+      if (!id) return [];
 
-      const today = new Date();
-      const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 7) + '-01';
-      
-      console.log('Checking current month:', currentMonth);
-      
-      // Check if current month is closed
-      const { data: currentClosure } = await supabase
-        .from('budget_closures')
-        .select('*')
+      // Get months with budget items
+      const { data: budgetMonths, error: budgetError } = await supabase
+        .from('budget_items')
+        .select('month_year')
         .eq('client_id', id)
-        .eq('month_year', currentMonth)
-        .maybeSingle();
+        .order('month_year', { ascending: false });
 
-      console.log('Current month closure:', currentClosure);
+      if (budgetError) throw budgetError;
 
-      // If current month is not closed, use it
-      if (!currentClosure) {
-        console.log('Using current month:', currentMonth);
-        return currentMonth;
-      }
-
-      // If current month is closed, check next month
-      const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1).toISOString().slice(0, 7) + '-01';
-      
-      console.log('Checking next month:', nextMonth);
-      
-      const { data: nextClosure } = await supabase
+      // Get closed months
+      const { data: closedMonths, error: closedError } = await supabase
         .from('budget_closures')
-        .select('*')
-        .eq('client_id', id)
-        .eq('month_year', nextMonth)
-        .maybeSingle();
+        .select('month_year')
+        .eq('client_id', id);
 
-      console.log('Next month closure:', nextClosure);
+      if (closedError) throw closedError;
 
-      // If next month is not closed, use it
-      if (!nextClosure) {
-        console.log('Using next month:', nextMonth);
-        return nextMonth;
-      }
+      // Create unique list of months
+      const uniqueMonths = [...new Set([
+        ...(budgetMonths?.map(item => item.month_year) || []),
+        ...(closedMonths?.map(item => item.month_year) || [])
+      ])].sort().reverse();
 
-      // If both current and next month are closed, use current month anyway
-      // This prevents jumping too far into the future
-      console.log('Both months closed, defaulting to current month:', currentMonth);
-      return currentMonth;
+      console.log('Available months:', uniqueMonths);
+      return uniqueMonths;
     },
     enabled: !!id,
   });
 
-  // Get budget items for the current open cycle
+  // Determine the current display month
+  const currentDisplayMonth = selectedMonth || (() => {
+    const today = new Date();
+    const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 7) + '-01';
+    
+    // If we have available months with data, prioritize the most recent one
+    if (availableMonths && availableMonths.length > 0) {
+      const mostRecentMonth = availableMonths[0];
+      console.log('Using most recent month with data:', mostRecentMonth);
+      return mostRecentMonth;
+    }
+    
+    // Otherwise use current month
+    console.log('Using current month (no existing data):', currentMonth);
+    return currentMonth;
+  })();
+
+  // Get budget items for the current display month
   const { data: budgetItems, isLoading: budgetLoading } = useQuery({
-    queryKey: ['budget-items', id, currentOpenCycle],
+    queryKey: ['budget-items', id, currentDisplayMonth],
     queryFn: async () => {
-      if (!id || !currentOpenCycle) return [];
+      if (!id || !currentDisplayMonth) return [];
       
-      console.log('Fetching budget items for cycle:', currentOpenCycle);
+      console.log('Fetching budget items for month:', currentDisplayMonth);
       
       const { data, error } = await supabase
         .from('budget_items')
@@ -96,22 +93,22 @@ const MonthlyBudget = () => {
           )
         `)
         .eq('client_id', id)
-        .eq('month_year', currentOpenCycle);
+        .eq('month_year', currentDisplayMonth);
       
       if (error) throw error;
       console.log('Budget items found:', data?.length || 0);
       return data;
     },
-    enabled: !!id && !!currentOpenCycle,
+    enabled: !!id && !!currentDisplayMonth,
   });
 
   // Get previous month data for copying
   const { data: previousMonthData } = useQuery({
-    queryKey: ['previous-month-items', id, currentOpenCycle],
+    queryKey: ['previous-month-items', id, currentDisplayMonth],
     queryFn: async () => {
-      if (!id || !currentOpenCycle) return [];
+      if (!id || !currentDisplayMonth) return [];
       
-      const currentDate = new Date(currentOpenCycle);
+      const currentDate = new Date(currentDisplayMonth);
       const previousMonthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
       const previousMonth = previousMonthDate.toISOString().slice(0, 7) + '-01';
       
@@ -133,30 +130,30 @@ const MonthlyBudget = () => {
       console.log('Previous month data found:', data?.length || 0, 'items');
       return data;
     },
-    enabled: !!id && !!currentOpenCycle,
+    enabled: !!id && !!currentDisplayMonth,
   });
 
-  // Check if current cycle is closed
+  // Check if current display month is closed
   const { data: monthClosure } = useQuery({
-    queryKey: ['budget-closure', id, currentOpenCycle],
+    queryKey: ['budget-closure', id, currentDisplayMonth],
     queryFn: async () => {
-      if (!id || !currentOpenCycle) return null;
+      if (!id || !currentDisplayMonth) return null;
       
       const { data, error } = await supabase
         .from('budget_closures')
         .select('*')
         .eq('client_id', id)
-        .eq('month_year', currentOpenCycle)
+        .eq('month_year', currentDisplayMonth)
         .maybeSingle();
       
       if (error) throw error;
       return data;
     },
-    enabled: !!id && !!currentOpenCycle,
+    enabled: !!id && !!currentDisplayMonth,
   });
 
   const { closeMonthMutation, copyFromPreviousMonthMutation, deleteItemMutation } = 
-    useBudgetMutations(id, currentOpenCycle);
+    useBudgetMutations(id, currentDisplayMonth);
 
   // Initialize categories if empty
   useEffect(() => {
@@ -191,6 +188,10 @@ const MonthlyBudget = () => {
     if (planned === 0) return 0;
     const variance = ((actual - planned) / planned) * 100;
     return variance;
+  };
+
+  const handleMonthChange = (monthYear: string) => {
+    setSelectedMonth(monthYear);
   };
 
   const handleEditItem = (item: any, type: 'income' | 'expense') => {
@@ -245,14 +246,16 @@ const MonthlyBudget = () => {
     }
   };
 
-  const isLoading = clientLoading || budgetLoading || openCycleLoading;
+  const isLoading = clientLoading || budgetLoading || monthsLoading;
   const isMonthClosed = !!monthClosure;
   
   // Check if there's previous month data
   const hasPreviousMonthData = previousMonthData && previousMonthData.length > 0;
 
   console.log('Debug info:', {
-    currentOpenCycle,
+    currentDisplayMonth,
+    selectedMonth,
+    availableMonths: availableMonths?.length || 0,
     hasPreviousMonthData,
     previousMonthDataLength: previousMonthData?.length || 0,
     isMonthClosed,
@@ -299,10 +302,12 @@ const MonthlyBudget = () => {
     <div className="max-w-6xl mx-auto p-6 space-y-6">
       <BudgetHeader
         clientName={client?.name || ''}
-        monthYear={currentOpenCycle || ''}
+        monthYear={currentDisplayMonth || ''}
         isMonthClosed={isMonthClosed}
         hasPreviousMonthData={hasPreviousMonthData}
         isCopyingFromPrevious={copyFromPreviousMonthMutation.isPending}
+        availableMonths={availableMonths || []}
+        onMonthChange={handleMonthChange}
         onViewHistory={handleViewHistory}
         onCopyFromPreviousMonth={handleCopyFromPreviousMonth}
         onAddIncome={() => setIncomeFormOpen(true)}
@@ -360,7 +365,7 @@ const MonthlyBudget = () => {
         editingType={editingType}
         itemToDelete={itemToDelete}
         clientId={id!}
-        monthYear={currentOpenCycle}
+        monthYear={currentDisplayMonth}
         isReadOnly={isMonthClosed}
         onFormClose={handleFormClose}
         onDeleteClose={() => setDeleteDialogOpen(false)}
