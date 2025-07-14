@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -22,7 +23,7 @@ const MonthlyBudget = () => {
 
   const { client, clientLoading, categories, initializeCategories } = useBudgetData(id);
 
-  // Find the current open cycle
+  // Find the current open cycle - simplified logic
   const { data: currentOpenCycle, isLoading: openCycleLoading } = useQuery({
     queryKey: ['current-open-cycle', id],
     queryFn: async () => {
@@ -31,6 +32,9 @@ const MonthlyBudget = () => {
       const today = new Date();
       const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 7) + '-01';
       
+      console.log('Checking current month:', currentMonth);
+      
+      // Check if current month is closed
       const { data: currentClosure } = await supabase
         .from('budget_closures')
         .select('*')
@@ -38,11 +42,19 @@ const MonthlyBudget = () => {
         .eq('month_year', currentMonth)
         .maybeSingle();
 
+      console.log('Current month closure:', currentClosure);
+
+      // If current month is not closed, use it
       if (!currentClosure) {
+        console.log('Using current month:', currentMonth);
         return currentMonth;
       }
 
+      // If current month is closed, check next month
       const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1).toISOString().slice(0, 7) + '-01';
+      
+      console.log('Checking next month:', nextMonth);
+      
       const { data: nextClosure } = await supabase
         .from('budget_closures')
         .select('*')
@@ -50,27 +62,17 @@ const MonthlyBudget = () => {
         .eq('month_year', nextMonth)
         .maybeSingle();
 
+      console.log('Next month closure:', nextClosure);
+
+      // If next month is not closed, use it
       if (!nextClosure) {
+        console.log('Using next month:', nextMonth);
         return nextMonth;
       }
 
-      let checkMonth = new Date(today.getFullYear(), today.getMonth() + 2, 1);
-      for (let i = 0; i < 12; i++) {
-        const monthStr = checkMonth.toISOString().slice(0, 7) + '-01';
-        const { data: closure } = await supabase
-          .from('budget_closures')
-          .select('*')
-          .eq('client_id', id)
-          .eq('month_year', monthStr)
-          .maybeSingle();
-
-        if (!closure) {
-          return monthStr;
-        }
-
-        checkMonth.setMonth(checkMonth.getMonth() + 1);
-      }
-
+      // If both current and next month are closed, use current month anyway
+      // This prevents jumping too far into the future
+      console.log('Both months closed, defaulting to current month:', currentMonth);
       return currentMonth;
     },
     enabled: !!id,
@@ -81,6 +83,8 @@ const MonthlyBudget = () => {
     queryKey: ['budget-items', id, currentOpenCycle],
     queryFn: async () => {
       if (!id || !currentOpenCycle) return [];
+      
+      console.log('Fetching budget items for cycle:', currentOpenCycle);
       
       const { data, error } = await supabase
         .from('budget_items')
@@ -95,12 +99,13 @@ const MonthlyBudget = () => {
         .eq('month_year', currentOpenCycle);
       
       if (error) throw error;
+      console.log('Budget items found:', data?.length || 0);
       return data;
     },
     enabled: !!id && !!currentOpenCycle,
   });
 
-  // Get previous month data for copying - ALWAYS check regardless of current month data
+  // Get previous month data for copying
   const { data: previousMonthData } = useQuery({
     queryKey: ['previous-month-items', id, currentOpenCycle],
     queryFn: async () => {
@@ -243,8 +248,16 @@ const MonthlyBudget = () => {
   const isLoading = clientLoading || budgetLoading || openCycleLoading;
   const isMonthClosed = !!monthClosure;
   
-  // Check if there's previous month data - this should work regardless of current month status
+  // Check if there's previous month data
   const hasPreviousMonthData = previousMonthData && previousMonthData.length > 0;
+
+  console.log('Debug info:', {
+    currentOpenCycle,
+    hasPreviousMonthData,
+    previousMonthDataLength: previousMonthData?.length || 0,
+    isMonthClosed,
+    budgetItemsLength: budgetItems?.length || 0
+  });
 
   if (isLoading) {
     return (
@@ -281,12 +294,6 @@ const MonthlyBudget = () => {
   
   const plannedBalance = totalPlannedIncome - totalPlannedExpenses;
   const actualBalance = totalActualIncome - totalActualExpenses;
-
-  console.log('Previous month data check:', {
-    hasPreviousMonthData,
-    previousMonthDataLength: previousMonthData?.length || 0,
-    isMonthClosed
-  });
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-6">
