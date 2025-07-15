@@ -32,7 +32,18 @@ const BudgetHeader = ({
   hasBudgetItems
 }: BudgetHeaderProps) => {
   const formatMonthYear = (monthYear: string) => {
-    const date = new Date(monthYear);
+    // Parse the date string correctly as YYYY-MM-DD
+    const [year, month] = monthYear.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+    
+    console.log('Formatting month year:', {
+      input: monthYear,
+      year: parseInt(year),
+      month: parseInt(month) - 1,
+      date: date.toISOString(),
+      formatted: date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+    });
+    
     return date.toLocaleDateString('pt-BR', { 
       month: 'long', 
       year: 'numeric' 

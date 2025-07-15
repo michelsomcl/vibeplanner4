@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -28,18 +29,22 @@ const MonthlyBudget = () => {
     queryFn: async () => {
       if (!id) return null;
 
-      // Force current month to be July 2025
+      // Get current month correctly - July 2025 should be "2025-07-01"
       const today = new Date();
-      const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 7) + '-01';
+      const year = today.getFullYear();
+      const month = today.getMonth() + 1; // getMonth() is 0-based, so July = 6, we need 7
+      const currentMonth = `${year}-${month.toString().padStart(2, '0')}-01`;
       
-      console.log('Current month calculation:', {
+      console.log('Current month calculation fixed:', {
         today: today.toISOString(),
+        year,
+        month: today.getMonth(), // This is 6 for July
+        correctedMonth: month, // This is 7 for July
         currentMonth,
-        month: today.getMonth(),
-        year: today.getFullYear()
+        todayMonth: today.getMonth(),
+        todayYear: today.getFullYear()
       });
       
-      // Always return current month for now to debug
       return currentMonth;
     },
     enabled: !!id,
@@ -72,19 +77,22 @@ const MonthlyBudget = () => {
     enabled: !!id && !!currentOpenCycle,
   });
 
-  // Get previous month data for copying - FIX THE CALCULATION
+  // Get previous month data for copying - FIXED CALCULATION
   const { data: previousMonthData } = useQuery({
     queryKey: ['previous-month-items', id, currentOpenCycle],
     queryFn: async () => {
       if (!id || !currentOpenCycle) return [];
       
       // Fix the previous month calculation
-      const currentDate = new Date(currentOpenCycle + 'T00:00:00.000Z');
+      const [year, month] = currentOpenCycle.split('-');
+      const currentDate = new Date(parseInt(year), parseInt(month) - 1, 1);
       const previousMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
-      const previousMonthStr = previousMonth.toISOString().slice(0, 7) + '-01';
+      const previousMonthStr = `${previousMonth.getFullYear()}-${(previousMonth.getMonth() + 1).toString().padStart(2, '0')}-01`;
       
-      console.log('Previous month calculation:', {
+      console.log('Previous month calculation fixed:', {
         currentOpenCycle,
+        year: parseInt(year),
+        month: parseInt(month) - 1,
         currentDate: currentDate.toISOString(),
         previousMonth: previousMonth.toISOString(),
         previousMonthStr
