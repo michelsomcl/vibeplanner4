@@ -7,9 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Plus, TrendingUp, Target, Trash2 } from "lucide-react";
+import { Plus, TrendingUp, Target, Trash2, Calculator } from "lucide-react";
 
 export default function AssetAccumulation() {
   const { id: clientId } = useParams<{ id: string }>();
@@ -26,6 +27,7 @@ export default function AssetAccumulation() {
     current_value: "",
     expected_return: "",
     observations: "",
+    goal_id: "",
   });
 
   const [goalFormData, setGoalFormData] = useState({
@@ -33,7 +35,8 @@ export default function AssetAccumulation() {
     target_value: "",
     current_value: "",
     monthly_contribution: "",
-    deadline: "",
+    start_month: "",
+    end_month: "",
     observations: "",
   });
 
@@ -89,13 +92,32 @@ export default function AssetAccumulation() {
         .single();
 
       if (error) throw error;
+
+      // If goal is selected, add asset value to goal
+      if (data.goal_id) {
+        const goal = goals?.find(g => g.id === data.goal_id);
+        if (goal) {
+          const newCurrentValue = goal.current_value + parseFloat(data.current_value);
+          const progress = Math.min((newCurrentValue / goal.target_value) * 100, 100);
+
+          await supabase
+            .from('financial_goals')
+            .update({
+              current_value: newCurrentValue,
+              progress: progress
+            })
+            .eq('id', data.goal_id);
+        }
+      }
+
       return asset;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['assets', clientId] });
+      queryClient.invalidateQueries({ queryKey: ['financial_goals', clientId] });
       toast({ title: "Ativo cadastrado com sucesso!" });
       setShowAssetForm(false);
-      setAssetFormData({ type: "", description: "", current_value: "", expected_return: "", observations: "" });
+      setAssetFormData({ type: "", description: "", current_value: "", expected_return: "", observations: "", goal_id: "" });
     },
   });
 
@@ -107,6 +129,15 @@ export default function AssetAccumulation() {
       const targetValue = parseFloat(data.target_value);
       const progress = targetValue > 0 ? (currentValue / targetValue) * 100 : 0;
 
+      // Calculate months between start and end dates
+      const startDate = new Date(data.start_month + '-01');
+      const endDate = new Date(data.end_month + '-01');
+      const monthsDiff = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                        (endDate.getMonth() - startDate.getMonth()) + 1;
+
+      const remainingValue = targetValue - currentValue;
+      const monthlyAverage = monthsDiff > 0 ? remainingValue / monthsDiff : 0;
+
       const { data: goal, error } = await supabase
         .from('financial_goals')
         .insert([{
@@ -114,8 +145,8 @@ export default function AssetAccumulation() {
           name: data.name,
           target_value: targetValue,
           current_value: currentValue,
-          monthly_contribution: parseFloat(data.monthly_contribution) || 0,
-          deadline: data.deadline || null,
+          monthly_contribution: monthlyAverage,
+          deadline: data.end_month + '-01',
           progress: progress,
           observations: data.observations || null,
         }])
@@ -129,7 +160,7 @@ export default function AssetAccumulation() {
       queryClient.invalidateQueries({ queryKey: ['financial_goals', clientId] });
       toast({ title: "Meta cadastrada com sucesso!" });
       setShowGoalForm(false);
-      setGoalFormData({ name: "", target_value: "", current_value: "", monthly_contribution: "", deadline: "", observations: "" });
+      setGoalFormData({ name: "", target_value: "", current_value: "", monthly_contribution: "", start_month: "", end_month: "", observations: "" });
     },
   });
 
@@ -138,6 +169,10 @@ export default function AssetAccumulation() {
       style: 'currency',
       currency: 'BRL'
     }).format(value);
+  };
+
+  const calculateRealReturn = (nominalReturn: number, inflation: number = 4) => {
+    return ((1 + nominalReturn / 100) / (1 + inflation / 100) - 1) * 100;
   };
 
   const totalAssets = assets?.reduce((sum, asset) => sum + asset.current_value, 0) || 0;
@@ -237,6 +272,23 @@ export default function AssetAccumulation() {
                           onChange={(e) => setAssetFormData(prev => ({ ...prev, expected_return: e.target.value }))}
                         />
                       </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="goal_select">Meta Financeira (Opcional)</Label>
+                        <Select value={assetFormData.goal_id} onValueChange={(value) => setAssetFormData(prev => ({ ...prev, goal_id: value }))}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione uma meta" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="">Nenhuma meta</SelectItem>
+                            {goals?.map((goal) => (
+                              <SelectItem key={goal.id} value={goal.id}>
+                                {goal.name} - {formatCurrency(goal.target_value)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
 
                     <div className="space-y-2">
@@ -296,10 +348,22 @@ export default function AssetAccumulation() {
                         </span>
                       </div>
                       {asset.expected_return > 0 && (
-                        <div className="flex justify-between">
-                          <span>Rentabilidade:</span>
-                          <span className="font-medium">{asset.expected_return}% a.a.</span>
-                        </div>
+                        <>
+                          <div className="flex justify-between">
+                            <span>Rentabilidade Bruta:</span>
+                            <span className="font-medium">{asset.expected_return}% a.a.</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Rentabilidade Real:</span>
+                            <span className="font-medium text-blue-600">
+                              {calculateRealReturn(asset.expected_return).toFixed(2)}% a.a.
+                            </span>
+                          </div>
+                          <div className="text-xs text-gray-500 mt-2 p-2 bg-gray-50 rounded">
+                            <Calculator className="inline h-3 w-3 mr-1" />
+                            Rentabilidade real considerando IPCA médio de 4% a.a.
+                          </div>
+                        </>
                       )}
                     </div>
                   </CardContent>
@@ -375,25 +439,54 @@ export default function AssetAccumulation() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="monthly_contribution">Aporte Mensal (R$)</Label>
+                        <Label htmlFor="start_month">Mês Inicial</Label>
                         <Input
-                          id="monthly_contribution"
-                          type="number"
-                          step="0.01"
-                          value={goalFormData.monthly_contribution}
-                          onChange={(e) => setGoalFormData(prev => ({ ...prev, monthly_contribution: e.target.value }))}
+                          id="start_month"
+                          type="month"
+                          value={goalFormData.start_month}
+                          onChange={(e) => setGoalFormData(prev => ({ ...prev, start_month: e.target.value }))}
+                          required
                         />
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="deadline">Prazo Desejado</Label>
+                        <Label htmlFor="end_month">Mês Final</Label>
                         <Input
-                          id="deadline"
-                          type="date"
-                          value={goalFormData.deadline}
-                          onChange={(e) => setGoalFormData(prev => ({ ...prev, deadline: e.target.value }))}
+                          id="end_month"
+                          type="month"
+                          value={goalFormData.end_month}
+                          onChange={(e) => setGoalFormData(prev => ({ ...prev, end_month: e.target.value }))}
+                          required
                         />
                       </div>
+
+                      {goalFormData.start_month && goalFormData.end_month && goalFormData.target_value && goalFormData.current_value && (
+                        <div className="space-y-2">
+                          <Label>Aporte Mensal Calculado</Label>
+                          <div className="p-3 bg-blue-50 rounded-lg">
+                            <span className="font-medium text-blue-700">
+                              {(() => {
+                                const startDate = new Date(goalFormData.start_month + '-01');
+                                const endDate = new Date(goalFormData.end_month + '-01');
+                                const monthsDiff = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                                                  (endDate.getMonth() - startDate.getMonth()) + 1;
+                                const remainingValue = parseFloat(goalFormData.target_value) - parseFloat(goalFormData.current_value || '0');
+                                const monthlyAverage = monthsDiff > 0 ? remainingValue / monthsDiff : 0;
+                                return formatCurrency(monthlyAverage);
+                              })()}
+                            </span>
+                            <p className="text-sm text-blue-600 mt-1">
+                              {(() => {
+                                const startDate = new Date(goalFormData.start_month + '-01');
+                                const endDate = new Date(goalFormData.end_month + '-01');
+                                const monthsDiff = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                                                  (endDate.getMonth() - startDate.getMonth()) + 1;
+                                return `Período: ${monthsDiff} meses`;
+                              })()}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="space-y-2">
