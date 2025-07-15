@@ -15,7 +15,7 @@ interface DeleteConfirmDialogProps {
   onClose: () => void;
   onConfirm: () => void;
   itemName: string;
-  itemType: 'receita' | 'despesa';
+  itemType: 'receita' | 'despesa' | 'ativo' | 'meta';
 }
 
 const DeleteConfirmDialog = ({ 
@@ -25,13 +25,28 @@ const DeleteConfirmDialog = ({
   itemName, 
   itemType 
 }: DeleteConfirmDialogProps) => {
+  const getItemTypeText = () => {
+    switch (itemType) {
+      case 'ativo':
+        return 'o ativo';
+      case 'meta':
+        return 'a meta';
+      case 'receita':
+        return 'a receita';
+      case 'despesa':
+        return 'a despesa';
+      default:
+        return 'o item';
+    }
+  };
+
   return (
     <AlertDialog open={isOpen} onOpenChange={onClose}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
           <AlertDialogDescription>
-            Tem certeza que deseja excluir a {itemType} "{itemName}"? 
+            Tem certeza que deseja excluir {getItemTypeText()} "{itemName}"? 
             Esta ação não pode ser desfeita.
           </AlertDialogDescription>
         </AlertDialogHeader>
