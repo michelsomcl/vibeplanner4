@@ -28,50 +28,18 @@ const MonthlyBudget = () => {
     queryFn: async () => {
       if (!id) return null;
 
+      // Force current month to be July 2025
       const today = new Date();
       const currentMonth = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 7) + '-01';
       
-      console.log('Current month (should be default):', currentMonth);
+      console.log('Current month calculation:', {
+        today: today.toISOString(),
+        currentMonth,
+        month: today.getMonth(),
+        year: today.getFullYear()
+      });
       
-      // Always start with current month for new budgets
-      // Only check if it's closed to potentially move to next month
-      const { data: currentClosure } = await supabase
-        .from('budget_closures')
-        .select('*')
-        .eq('client_id', id)
-        .eq('month_year', currentMonth)
-        .maybeSingle();
-
-      console.log('Current month closure status:', currentClosure);
-
-      // If current month is not closed, always use it (default behavior)
-      if (!currentClosure) {
-        console.log('Using current month (not closed):', currentMonth);
-        return currentMonth;
-      }
-
-      // If current month is closed, check if next month exists and is open
-      const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, 1).toISOString().slice(0, 7) + '-01';
-      
-      console.log('Checking next month:', nextMonth);
-      
-      const { data: nextClosure } = await supabase
-        .from('budget_closures')
-        .select('*')
-        .eq('client_id', id)
-        .eq('month_year', nextMonth)
-        .maybeSingle();
-
-      console.log('Next month closure status:', nextClosure);
-
-      // If next month is not closed, use it
-      if (!nextClosure) {
-        console.log('Using next month (current closed, next open):', nextMonth);
-        return nextMonth;
-      }
-
-      // If both are closed, default back to current month (user can still view/edit closed months)
-      console.log('Both months closed, defaulting to current month:', currentMonth);
+      // Always return current month for now to debug
       return currentMonth;
     },
     enabled: !!id,
@@ -104,17 +72,23 @@ const MonthlyBudget = () => {
     enabled: !!id && !!currentOpenCycle,
   });
 
-  // Get previous month data for copying
+  // Get previous month data for copying - FIX THE CALCULATION
   const { data: previousMonthData } = useQuery({
     queryKey: ['previous-month-items', id, currentOpenCycle],
     queryFn: async () => {
       if (!id || !currentOpenCycle) return [];
       
-      const currentDate = new Date(currentOpenCycle);
-      const previousMonthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
-      const previousMonth = previousMonthDate.toISOString().slice(0, 7) + '-01';
+      // Fix the previous month calculation
+      const currentDate = new Date(currentOpenCycle + 'T00:00:00.000Z');
+      const previousMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1);
+      const previousMonthStr = previousMonth.toISOString().slice(0, 7) + '-01';
       
-      console.log('Checking previous month data for:', previousMonth);
+      console.log('Previous month calculation:', {
+        currentOpenCycle,
+        currentDate: currentDate.toISOString(),
+        previousMonth: previousMonth.toISOString(),
+        previousMonthStr
+      });
       
       const { data, error } = await supabase
         .from('budget_items')
@@ -126,7 +100,7 @@ const MonthlyBudget = () => {
           )
         `)
         .eq('client_id', id)
-        .eq('month_year', previousMonth);
+        .eq('month_year', previousMonthStr);
       
       if (error) throw error;
       console.log('Previous month data found:', data?.length || 0, 'items');
@@ -157,7 +131,7 @@ const MonthlyBudget = () => {
   const { closeMonthMutation, copyFromPreviousMonthMutation, deleteItemMutation } = 
     useBudgetMutations(id, currentOpenCycle);
 
-  // Initialize categories if empty
+  // useEffect, formatCurrency, getCategoryColor, getVariance functions
   useEffect(() => {
     if (categories && categories.length === 0) {
       initializeCategories.mutate();
