@@ -27,7 +27,7 @@ export default function AssetAccumulation() {
     current_value: "",
     expected_return: "",
     observations: "",
-    goal_id: "",
+    goal_id: "none",
   });
 
   const [goalFormData, setGoalFormData] = useState({
@@ -94,7 +94,7 @@ export default function AssetAccumulation() {
       if (error) throw error;
 
       // If goal is selected, add asset value to goal
-      if (data.goal_id) {
+      if (data.goal_id !== "none") {
         const goal = goals?.find(g => g.id === data.goal_id);
         if (goal) {
           const newCurrentValue = goal.current_value + parseFloat(data.current_value);
@@ -117,7 +117,7 @@ export default function AssetAccumulation() {
       queryClient.invalidateQueries({ queryKey: ['financial_goals', clientId] });
       toast({ title: "Ativo cadastrado com sucesso!" });
       setShowAssetForm(false);
-      setAssetFormData({ type: "", description: "", current_value: "", expected_return: "", observations: "", goal_id: "" });
+      setAssetFormData({ type: "", description: "", current_value: "", expected_return: "", observations: "", goal_id: "none" });
     },
   });
 
@@ -280,7 +280,7 @@ export default function AssetAccumulation() {
                             <SelectValue placeholder="Selecione uma meta" />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="">Nenhuma meta</SelectItem>
+                            <SelectItem value="none">Nenhuma meta</SelectItem>
                             {goals?.map((goal) => (
                               <SelectItem key={goal.id} value={goal.id}>
                                 {goal.name} - {formatCurrency(goal.target_value)}
