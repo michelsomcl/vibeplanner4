@@ -6,7 +6,7 @@ import { toast } from "sonner";
 export const useBudgetMutations = (clientId: string | undefined, currentOpenCycle?: string | null) => {
   const queryClient = useQueryClient();
 
-  // Close month mutation
+  // Close month mutation - updated to refresh the open cycle query
   const closeMonthMutation = useMutation({
     mutationFn: async (budgetItems: any[]) => {
       if (!clientId || !currentOpenCycle) throw new Error('Dados necessários não disponíveis');
@@ -34,10 +34,13 @@ export const useBudgetMutations = (clientId: string | undefined, currentOpenCycl
       if (closureError) throw closureError;
     },
     onSuccess: () => {
+      // Invalidate all relevant queries to trigger re-fetch and automatic next month opening
       queryClient.invalidateQueries({ queryKey: ['current-open-cycle', clientId] });
       queryClient.invalidateQueries({ queryKey: ['budget-closure'] });
       queryClient.invalidateQueries({ queryKey: ['budget-items'] });
-      toast.success('Mês fechado com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['closed-cycles', clientId] });
+      queryClient.invalidateQueries({ queryKey: ['previous-month-items'] });
+      toast.success('Mês fechado com sucesso! O próximo ciclo foi aberto automaticamente.');
     },
     onError: (error) => {
       console.error('Erro ao fechar mês:', error);

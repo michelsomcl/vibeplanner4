@@ -23,29 +23,67 @@ const MonthlyBudget = () => {
 
   const { client, clientLoading, categories, initializeCategories } = useBudgetData(id);
 
-  // Get the current month as the default open cycle
+  // Get the current open cycle - either current month or next available month after closure
   const { data: currentOpenCycle, isLoading: openCycleLoading } = useQuery({
     queryKey: ['current-open-cycle', id],
     queryFn: async () => {
       if (!id) return null;
 
-      // Get current month correctly - July 2025 should be "2025-07-01"
+      // Get current month correctly
       const today = new Date();
       const year = today.getFullYear();
-      const month = today.getMonth() + 1; // getMonth() is 0-based, so July = 6, we need 7
+      const month = today.getMonth() + 1;
       const currentMonth = `${year}-${month.toString().padStart(2, '0')}-01`;
       
-      console.log('Current month calculation fixed:', {
+      console.log('Current month calculation:', {
         today: today.toISOString(),
         year,
-        month: today.getMonth(), // This is 6 for July
-        correctedMonth: month, // This is 7 for July
-        currentMonth,
-        todayMonth: today.getMonth(),
-        todayYear: today.getFullYear()
+        month: today.getMonth(),
+        correctedMonth: month,
+        currentMonth
       });
+
+      // Check if current month is closed
+      const { data: currentClosure } = await supabase
+        .from('budget_closures')
+        .select('*')
+        .eq('client_id', id)
+        .eq('month_year', currentMonth)
+        .maybeSingle();
+
+      if (!currentClosure) {
+        // Current month is not closed, return it
+        return currentMonth;
+      }
+
+      // Current month is closed, find the next available month
+      let nextMonth = new Date(year, month, 1); // Start from next month
       
-      return currentMonth;
+      while (true) {
+        const nextMonthStr = `${nextMonth.getFullYear()}-${(nextMonth.getMonth() + 1).toString().padStart(2, '0')}-01`;
+        
+        const { data: nextClosure } = await supabase
+          .from('budget_closures')
+          .select('*')
+          .eq('client_id', id)
+          .eq('month_year', nextMonthStr)
+          .maybeSingle();
+
+        if (!nextClosure) {
+          console.log('Next available open cycle:', nextMonthStr);
+          return nextMonthStr;
+        }
+
+        // Move to next month
+        nextMonth.setMonth(nextMonth.getMonth() + 1);
+        
+        // Safety check to avoid infinite loop
+        if (nextMonth.getFullYear() > year + 2) {
+          break;
+        }
+      }
+      
+      return currentMonth; // Fallback
     },
     enabled: !!id,
   });
