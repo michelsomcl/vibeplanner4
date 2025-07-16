@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Trash2, Edit, Calculator } from "lucide-react";
+import { Trash2, Edit, Calculator, Calendar } from "lucide-react";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
 
 interface AssetCardProps {
@@ -49,6 +49,40 @@ export default function AssetCard({ asset, clientId, formatCurrency, calculateRe
     deleteAssetMutation.mutate(asset.id);
   };
 
+  const calculateProjectedValue = () => {
+    if (!asset.expected_return || !asset.maturity_date || asset.expected_return <= 0) {
+      return null;
+    }
+
+    const currentDate = new Date();
+    const maturityDate = new Date(asset.maturity_date);
+    const monthsToMaturity = (maturityDate.getFullYear() - currentDate.getFullYear()) * 12 + 
+                            (maturityDate.getMonth() - currentDate.getMonth());
+
+    if (monthsToMaturity <= 0) {
+      return null;
+    }
+
+    const yearsToMaturity = monthsToMaturity / 12;
+    const projectedValue = asset.current_value * Math.pow(1 + asset.expected_return / 100, yearsToMaturity);
+    const monetaryReturn = projectedValue - asset.current_value;
+
+    return {
+      projectedValue,
+      monetaryReturn,
+      monthsToMaturity,
+      yearsToMaturity
+    };
+  };
+
+  const formatDate = (dateString: string) => {
+    if (!dateString) return '';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('pt-BR');
+  };
+
+  const projection = calculateProjectedValue();
+
   return (
     <>
       <Card className="border-l-4 border-l-green-500">
@@ -80,6 +114,19 @@ export default function AssetCard({ asset, clientId, formatCurrency, calculateRe
                 {formatCurrency(asset.current_value)}
               </span>
             </div>
+            
+            {asset.maturity_date && (
+              <div className="flex justify-between">
+                <span className="flex items-center">
+                  <Calendar className="h-3 w-3 mr-1" />
+                  Vencimento:
+                </span>
+                <span className="font-medium">
+                  {formatDate(asset.maturity_date)}
+                </span>
+              </div>
+            )}
+
             {asset.expected_return > 0 && (
               <>
                 <div className="flex justify-between">
@@ -92,6 +139,29 @@ export default function AssetCard({ asset, clientId, formatCurrency, calculateRe
                     {calculateRealReturn(asset.expected_return).toFixed(2)}% a.a.
                   </span>
                 </div>
+                
+                {projection && (
+                  <>
+                    <div className="border-t pt-2 mt-2">
+                      <div className="flex justify-between">
+                        <span>Valor Projetado:</span>
+                        <span className="font-medium text-green-700">
+                          {formatCurrency(projection.projectedValue)}
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Retorno Monetário:</span>
+                        <span className="font-medium text-green-700">
+                          {formatCurrency(projection.monetaryReturn)}
+                        </span>
+                      </div>
+                      <div className="text-xs text-gray-500 mt-1">
+                        Período: {projection.monthsToMaturity} meses ({projection.yearsToMaturity.toFixed(1)} anos)
+                      </div>
+                    </div>
+                  </>
+                )}
+
                 <div className="text-xs text-gray-500 mt-2 p-2 bg-gray-50 rounded">
                   <Calculator className="inline h-3 w-3 mr-1" />
                   Rentabilidade real considerando IPCA médio de 4% a.a.

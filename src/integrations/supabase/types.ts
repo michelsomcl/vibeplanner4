@@ -22,6 +22,7 @@ export type Database = {
           description: string
           expected_return: number | null
           id: string
+          maturity_date: string | null
           observations: string | null
           type: string
           updated_at: string
@@ -33,6 +34,7 @@ export type Database = {
           description: string
           expected_return?: number | null
           id?: string
+          maturity_date?: string | null
           observations?: string | null
           type: string
           updated_at?: string
@@ -44,6 +46,7 @@ export type Database = {
           description?: string
           expected_return?: number | null
           id?: string
+          maturity_date?: string | null
           observations?: string | null
           type?: string
           updated_at?: string

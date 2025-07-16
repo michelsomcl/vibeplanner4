@@ -25,6 +25,7 @@ export default function AssetAccumulation() {
     description: "",
     current_value: "",
     expected_return: "",
+    maturity_date: "",
     observations: "",
     goal_id: "none"
   });
@@ -71,25 +72,44 @@ export default function AssetAccumulation() {
   const createAssetMutation = useMutation({
     mutationFn: async (data: typeof assetFormData) => {
       if (!clientId) throw new Error('ID do cliente não fornecido');
+      
+      const currentValue = parseFloat(data.current_value);
+      const expectedReturn = data.expected_return ? parseFloat(data.expected_return) : 0;
+      
+      // Calculate corrected value considering gross return for goals
+      let correctedValue = currentValue;
+      if (expectedReturn > 0 && data.maturity_date) {
+        const maturityDate = new Date(data.maturity_date);
+        const currentDate = new Date();
+        const monthsToMaturity = (maturityDate.getFullYear() - currentDate.getFullYear()) * 12 + 
+                                (maturityDate.getMonth() - currentDate.getMonth());
+        
+        if (monthsToMaturity > 0) {
+          const yearsToMaturity = monthsToMaturity / 12;
+          correctedValue = currentValue * Math.pow(1 + expectedReturn / 100, yearsToMaturity);
+        }
+      }
+
       const { data: asset, error } = await supabase
         .from('assets')
         .insert([{
           client_id: clientId,
           type: data.type,
           description: data.description,
-          current_value: parseFloat(data.current_value),
-          expected_return: data.expected_return ? parseFloat(data.expected_return) : 0,
+          current_value: currentValue,
+          expected_return: expectedReturn,
+          maturity_date: data.maturity_date || null,
           observations: data.observations || null
         }])
         .select()
         .single();
       if (error) throw error;
 
-      // If goal is selected, add asset value to goal
+      // If goal is selected, add corrected asset value to goal
       if (data.goal_id !== "none") {
         const goal = goals?.find(g => g.id === data.goal_id);
         if (goal) {
-          const newCurrentValue = goal.current_value + parseFloat(data.current_value);
+          const newCurrentValue = goal.current_value + correctedValue;
           const progress = Math.min(newCurrentValue / goal.target_value * 100, 100);
           await supabase
             .from('financial_goals')
@@ -114,6 +134,7 @@ export default function AssetAccumulation() {
         description: "",
         current_value: "",
         expected_return: "",
+        maturity_date: "",
         observations: "",
         goal_id: "none"
       });
@@ -286,6 +307,16 @@ export default function AssetAccumulation() {
                       </div>
 
                       <div className="space-y-2">
+                        <Label htmlFor="maturity_date">Data de Vencimento (Títulos)</Label>
+                        <Input 
+                          id="maturity_date"
+                          type="date"
+                          value={assetFormData.maturity_date}
+                          onChange={(e) => setAssetFormData(prev => ({ ...prev, maturity_date: e.target.value }))}
+                        />
+                      </div>
+
+                      <div className="space-y-2 md:col-span-2">
                         <Label htmlFor="goal_select">Meta Financeira (Opcional)</Label>
                         <Select 
                           value={assetFormData.goal_id} 
@@ -326,6 +357,39 @@ export default function AssetAccumulation() {
                         rows={3}
                       />
                     </div>
+
+                    {/* Show projected value if return and maturity date are provided */}
+                    {assetFormData.current_value && assetFormData.expected_return && assetFormData.maturity_date && (
+                      <div className="p-4 bg-blue-50 rounded-lg">
+                        <h4 className="font-medium text-blue-900 mb-2">Projeção de Retorno</h4>
+                        <div className="text-sm text-blue-700">
+                          {(() => {
+                            const currentValue = parseFloat(assetFormData.current_value);
+                            const expectedReturn = parseFloat(assetFormData.expected_return);
+                            const maturityDate = new Date(assetFormData.maturity_date);
+                            const currentDate = new Date();
+                            const monthsToMaturity = (maturityDate.getFullYear() - currentDate.getFullYear()) * 12 + 
+                                                    (maturityDate.getMonth() - currentDate.getMonth());
+                            
+                            if (monthsToMaturity > 0) {
+                              const yearsToMaturity = monthsToMaturity / 12;
+                              const projectedValue = currentValue * Math.pow(1 + expectedReturn / 100, yearsToMaturity);
+                              const monetaryReturn = projectedValue - currentValue;
+                              
+                              return (
+                                <>
+                                  <p>Período: {monthsToMaturity} meses ({yearsToMaturity.toFixed(1)} anos)</p>
+                                  <p>Valor Projetado: {formatCurrency(projectedValue)}</p>
+                                  <p>Retorno Monetário: {formatCurrency(monetaryReturn)}</p>
+                                </>
+                              );
+                            } else {
+                              return <p>Data de vencimento deve ser futura</p>;
+                            }
+                          })()}
+                        </div>
+                      </div>
+                    )}
 
                     <div className="flex justify-end space-x-4">
                       <Button 
