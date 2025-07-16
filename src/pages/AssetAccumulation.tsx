@@ -12,6 +12,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Plus, TrendingUp, Target } from "lucide-react";
 import AssetCard from "@/components/asset-accumulation/AssetCard";
 import GoalCard from "@/components/asset-accumulation/GoalCard";
+import EditAssetForm from "@/components/asset-accumulation/EditAssetForm";
+import EditGoalForm from "@/components/asset-accumulation/EditGoalForm";
 
 export default function AssetAccumulation() {
   const { id: clientId } = useParams<{ id: string }>();
@@ -20,6 +22,10 @@ export default function AssetAccumulation() {
   const [activeTab, setActiveTab] = useState<'assets' | 'goals'>('assets');
   const [showAssetForm, setShowAssetForm] = useState(false);
   const [showGoalForm, setShowGoalForm] = useState(false);
+  const [editAssetForm, setEditAssetForm] = useState(false);
+  const [editGoalForm, setEditGoalForm] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<any>(null);
+  const [selectedGoal, setSelectedGoal] = useState<any>(null);
   const [assetFormData, setAssetFormData] = useState({
     type: "",
     description: "",
@@ -203,6 +209,16 @@ export default function AssetAccumulation() {
   };
 
   const totalAssets = assets?.reduce((sum, asset) => sum + asset.current_value, 0) || 0;
+
+  const handleEditAsset = (asset: any) => {
+    setSelectedAsset(asset);
+    setEditAssetForm(true);
+  };
+
+  const handleEditGoal = (goal: any) => {
+    setSelectedGoal(goal);
+    setEditGoalForm(true);
+  };
 
   return (
     <div className="container mx-auto px-6 py-8">
@@ -417,6 +433,7 @@ export default function AssetAccumulation() {
                   clientId={clientId!}
                   formatCurrency={formatCurrency}
                   calculateRealReturn={calculateRealReturn}
+                  onEdit={handleEditAsset}
                 />
               ))}
             </div>
@@ -580,11 +597,35 @@ export default function AssetAccumulation() {
                   goal={goal}
                   clientId={clientId!}
                   formatCurrency={formatCurrency}
+                  onEdit={handleEditGoal}
                 />
               ))}
             </div>
           </div>
         )}
+
+        {/* Edit Forms */}
+        <EditAssetForm
+          isOpen={editAssetForm}
+          onClose={() => {
+            setEditAssetForm(false);
+            setSelectedAsset(null);
+          }}
+          asset={selectedAsset}
+          clientId={clientId!}
+          formatCurrency={formatCurrency}
+        />
+
+        <EditGoalForm
+          isOpen={editGoalForm}
+          onClose={() => {
+            setEditGoalForm(false);
+            setSelectedGoal(null);
+          }}
+          goal={selectedGoal}
+          clientId={clientId!}
+          formatCurrency={formatCurrency}
+        />
       </div>
     </div>
   );
