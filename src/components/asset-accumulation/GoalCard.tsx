@@ -78,6 +78,7 @@ export default function GoalCard({ goal, clientId, formatCurrency }: GoalCardPro
   };
 
   const progress = Math.min(goal.current_value / goal.target_value * 100, 100);
+  const remainingValue = Math.max(goal.target_value - goal.current_value, 0);
   const months = getStartEndMonths();
 
   return (
@@ -90,6 +91,7 @@ export default function GoalCard({ goal, clientId, formatCurrency }: GoalCardPro
               <div className="flex items-center space-x-4 text-sm text-gray-600 mt-1">
                 <span>Meta: {formatCurrency(goal.target_value)}</span>
                 <span>Atual: {formatCurrency(goal.current_value)}</span>
+                <span>Restante: {formatCurrency(remainingValue)}</span>
                 {goal.monthly_contribution > 0 && (
                   <span>Aporte: {formatCurrency(goal.monthly_contribution)}/mês</span>
                 )}
