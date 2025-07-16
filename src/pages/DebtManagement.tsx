@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
@@ -11,9 +10,10 @@ import DebtForm from "@/components/DebtForm";
 import DebtPaymentForm from "@/components/DebtPaymentForm";
 import DebtDiagnosis from "@/components/DebtDiagnosis";
 import DeleteConfirmDialog from "@/components/DeleteConfirmDialog";
-
 const DebtManagement = () => {
-  const { id } = useParams();
+  const {
+    id
+  } = useParams();
   const [debtFormOpen, setDebtFormOpen] = useState(false);
   const [paymentFormOpen, setPaymentFormOpen] = useState(false);
   const [selectedDebt, setSelectedDebt] = useState<any>(null);
@@ -22,76 +22,77 @@ const DebtManagement = () => {
   const [debtToDelete, setDebtToDelete] = useState<any>(null);
 
   // Get client data
-  const { data: client, isLoading: clientLoading } = useQuery({
+  const {
+    data: client,
+    isLoading: clientLoading
+  } = useQuery({
     queryKey: ['client', id],
     queryFn: async () => {
       if (!id) throw new Error('ID do cliente não fornecido');
-      
-      const { data, error } = await supabase
-        .from('clients')
-        .select('*')
-        .eq('id', id)
-        .single();
-      
+      const {
+        data,
+        error
+      } = await supabase.from('clients').select('*').eq('id', id).single();
       if (error) throw error;
       return data;
     },
-    enabled: !!id,
+    enabled: !!id
   });
 
   // Get debts
-  const { data: debts, isLoading: debtsLoading } = useQuery({
+  const {
+    data: debts,
+    isLoading: debtsLoading
+  } = useQuery({
     queryKey: ['debts', id],
     queryFn: async () => {
       if (!id) return [];
-      
-      const { data, error } = await supabase
-        .from('debts')
-        .select('*')
-        .eq('client_id', id)
-        .order('created_at', { ascending: false });
-      
+      const {
+        data,
+        error
+      } = await supabase.from('debts').select('*').eq('client_id', id).order('created_at', {
+        ascending: false
+      });
       if (error) throw error;
       return data;
     },
-    enabled: !!id,
+    enabled: !!id
   });
 
   // Get debt payments
-  const { data: debtPayments, isLoading: paymentsLoading } = useQuery({
+  const {
+    data: debtPayments,
+    isLoading: paymentsLoading
+  } = useQuery({
     queryKey: ['debt-payments', id],
     queryFn: async () => {
       if (!id) return [];
-      
-      const { data, error } = await supabase
-        .from('debt_payments')
-        .select(`
+      const {
+        data,
+        error
+      } = await supabase.from('debt_payments').select(`
           *,
           debts (
             name,
             institution
           )
-        `)
-        .eq('client_id', id)
-        .order('payment_date', { ascending: false });
-      
+        `).eq('client_id', id).order('payment_date', {
+        ascending: false
+      });
       if (error) throw error;
       return data;
     },
-    enabled: !!id,
+    enabled: !!id
   });
-
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
     }).format(value);
   };
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('pt-BR');
   };
-
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'active':
@@ -104,7 +105,6 @@ const DebtManagement = () => {
         return 'bg-gray-100 text-gray-800';
     }
   };
-
   const getStatusText = (status: string) => {
     switch (status) {
       case 'active':
@@ -117,22 +117,18 @@ const DebtManagement = () => {
         return status;
     }
   };
-
   const handleRegisterPayment = (debt: any) => {
     setSelectedDebt(debt);
     setPaymentFormOpen(true);
   };
-
   const handleEditDebt = (debt: any) => {
     setEditingDebt(debt);
     setDebtFormOpen(true);
   };
-
   const handleDeleteItem = (debt: any) => {
     setDebtToDelete(debt);
     setDeleteDialogOpen(true);
   };
-
   const confirmDelete = () => {
     if (debtToDelete) {
       // Implement delete functionality here
@@ -141,48 +137,35 @@ const DebtManagement = () => {
       setDebtToDelete(null);
     }
   };
-
   const handleFormClose = () => {
     setDebtFormOpen(false);
     setPaymentFormOpen(false);
     setEditingDebt(null);
     setSelectedDebt(null);
   };
-
   const isLoading = clientLoading || debtsLoading || paymentsLoading;
-
   if (isLoading) {
-    return (
-      <div className="max-w-6xl mx-auto p-6 space-y-6">
+    return <div className="max-w-6xl mx-auto p-6 space-y-6">
         <div className="animate-pulse space-y-6">
           <div className="h-8 bg-gray-200 rounded w-1/3"></div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="h-32 bg-gray-200 rounded"></div>
-            ))}
+            {[...Array(3)].map((_, i) => <div key={i} className="h-32 bg-gray-200 rounded"></div>)}
           </div>
         </div>
-      </div>
-    );
+      </div>;
   }
-
   if (!client) {
-    return (
-      <div className="flex items-center justify-center h-64">
+    return <div className="flex items-center justify-center h-64">
         <div className="text-center">
           <h1 className="text-2xl font-bold text-gray-900 mb-4">Cliente não encontrado</h1>
         </div>
-      </div>
-    );
+      </div>;
   }
-
   const activeDebts = debts?.filter(debt => debt.status === 'active') || [];
   const totalDebt = activeDebts.reduce((sum, debt) => sum + debt.total_amount, 0);
   const totalMonthlyPayment = activeDebts.reduce((sum, debt) => sum + debt.installment_value, 0);
   const totalPayments = debtPayments?.reduce((sum, payment) => sum + payment.payment_amount, 0) || 0;
-
-  return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6">
+  return <div className="max-w-6xl mx-auto p-6 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -242,7 +225,7 @@ const DebtManagement = () => {
               <div>
                 <p className="text-sm font-medium text-gray-600">Comprometimento</p>
                 <p className="text-2xl font-bold text-blue-600">
-                  {client.monthly_income > 0 ? ((totalMonthlyPayment / client.monthly_income) * 100).toFixed(1) : 0}%
+                  {client.monthly_income > 0 ? (totalMonthlyPayment / client.monthly_income * 100).toFixed(1) : 0}%
                 </p>
                 <p className="text-xs text-gray-500">da renda mensal</p>
               </div>
@@ -253,9 +236,7 @@ const DebtManagement = () => {
       </div>
 
       {/* Debt Diagnosis */}
-      {debts && debts.length > 0 && (
-        <DebtDiagnosis debts={debts} monthlyIncome={client.monthly_income} />
-      )}
+      {debts && debts.length > 0 && <DebtDiagnosis debts={debts} monthlyIncome={client.monthly_income} />}
 
       {/* Debts List */}
       <Card>
@@ -263,22 +244,14 @@ const DebtManagement = () => {
           <CardTitle>Lista de Dívidas</CardTitle>
         </CardHeader>
         <CardContent>
-          {!debts || debts.length === 0 ? (
-            <div className="text-center py-8 text-gray-500">
+          {!debts || debts.length === 0 ? <div className="text-center py-8 text-gray-500">
               <p>Nenhuma dívida cadastrada.</p>
-              <Button 
-                className="mt-4" 
-                variant="outline"
-                onClick={() => setDebtFormOpen(true)}
-              >
+              <Button className="mt-4" variant="outline" onClick={() => setDebtFormOpen(true)}>
                 <Plus className="mr-2 h-4 w-4" />
                 Adicionar Primeira Dívida
               </Button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {debts.map((debt) => (
-                <div key={debt.id} className="border rounded-lg p-4 hover:bg-gray-50">
+            </div> : <div className="space-y-4">
+              {debts.map(debt => <div key={debt.id} className="border rounded-lg p-4 hover:bg-gray-50">
                   <div className="flex items-center justify-between">
                     <div className="flex-1">
                       <div className="flex items-center space-x-3 mb-2">
@@ -324,46 +297,32 @@ const DebtManagement = () => {
                     </div>
                     
                     <div className="flex flex-col space-y-2">
-                      <Button
-                        size="sm"
-                        onClick={() => handleRegisterPayment(debt)}
-                        className="bg-green-600 hover:bg-green-700"
-                      >
+                      <Button size="sm" onClick={() => handleRegisterPayment(debt)} className="bg-green-600 hover:bg-green-700">
                         <DollarSign className="h-4 w-4 mr-1" />
                         Registrar Pagamento
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleEditDebt(debt)}
-                      >
+                      <Button size="sm" variant="outline" onClick={() => handleEditDebt(debt)}>
                         Editar
                       </Button>
                     </div>
                   </div>
                   
-                  {debt.observations && (
-                    <div className="mt-3 pt-3 border-t text-sm text-gray-600">
+                  {debt.observations && <div className="mt-3 pt-3 border-t text-sm text-gray-600">
                       <span className="font-medium">Observações:</span> {debt.observations}
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
+                    </div>}
+                </div>)}
+            </div>}
         </CardContent>
       </Card>
 
       {/* Recent Payments */}
-      {debtPayments && debtPayments.length > 0 && (
-        <Card>
+      {debtPayments && debtPayments.length > 0 && <Card>
           <CardHeader>
-            <CardTitle>Pagamentos Recentes</CardTitle>
+            <CardTitle>Pagamentos Realizados</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {debtPayments.slice(0, 5).map((payment) => (
-                <div key={payment.id} className="flex items-center justify-between p-3 border rounded-lg">
+              {debtPayments.slice(0, 5).map(payment => <div key={payment.id} className="flex items-center justify-between p-3 border rounded-lg">
                   <div>
                     <p className="font-medium">{payment.debts?.name}</p>
                     <p className="text-sm text-gray-600">{payment.debts?.institution}</p>
@@ -371,41 +330,19 @@ const DebtManagement = () => {
                   </div>
                   <div className="text-right">
                     <p className="font-bold text-green-600">{formatCurrency(payment.payment_amount)}</p>
-                    {payment.observations && (
-                      <p className="text-xs text-gray-500 max-w-32 truncate">{payment.observations}</p>
-                    )}
+                    {payment.observations && <p className="text-xs text-gray-500 max-w-32 truncate">{payment.observations}</p>}
                   </div>
-                </div>
-              ))}
+                </div>)}
             </div>
           </CardContent>
-        </Card>
-      )}
+        </Card>}
 
       {/* Forms */}
-      <DebtForm
-        isOpen={debtFormOpen}
-        onClose={handleFormClose}
-        clientId={id!}
-        editDebt={editingDebt}
-      />
+      <DebtForm isOpen={debtFormOpen} onClose={handleFormClose} clientId={id!} editDebt={editingDebt} />
       
-      <DebtPaymentForm
-        isOpen={paymentFormOpen}
-        onClose={handleFormClose}
-        debt={selectedDebt}
-        clientId={id!}
-      />
+      <DebtPaymentForm isOpen={paymentFormOpen} onClose={handleFormClose} debt={selectedDebt} clientId={id!} />
 
-      <DeleteConfirmDialog
-        isOpen={deleteDialogOpen}
-        onClose={() => setDeleteDialogOpen(false)}
-        onConfirm={confirmDelete}
-        itemName={debtToDelete?.name || ''}
-        itemType="despesa"
-      />
-    </div>
-  );
+      <DeleteConfirmDialog isOpen={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} onConfirm={confirmDelete} itemName={debtToDelete?.name || ''} itemType="despesa" />
+    </div>;
 };
-
 export default DebtManagement;
