@@ -61,18 +61,19 @@ export default function GoalCard({ goal, clientId, formatCurrency }: GoalCardPro
   const getStartEndMonths = () => {
     if (!goal.deadline) return null;
     
-    // Calculate start month based on deadline and monthly contribution
-    const endDate = new Date(goal.deadline);
-    const endMonth = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}`;
-    
-    // For now, we'll estimate the start month based on the goal creation
-    // In a real scenario, you'd want to store this information separately
+    // Use the actual creation date and deadline from the database
     const createdDate = new Date(goal.created_at);
-    const startMonth = `${createdDate.getFullYear()}-${String(createdDate.getMonth() + 1).padStart(2, '0')}`;
+    const deadlineDate = new Date(goal.deadline);
+    
+    // Format the start month from creation date
+    const startMonth = formatDate(goal.created_at);
+    
+    // Format the end month from deadline
+    const endMonth = formatDate(goal.deadline);
     
     return {
-      start: formatDate(startMonth + '-01'),
-      end: formatDate(endMonth + '-01')
+      start: startMonth,
+      end: endMonth
     };
   };
 
